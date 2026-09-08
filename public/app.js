@@ -15,6 +15,31 @@ let state = { open: null, rounds: [] };
 let viewing = null; // a closed round being looked at, or null for the open one
 let pending = null; // the product a lookup returned, awaiting a variant choice
 
+// --- which deploy is this -------------------------------------------------
+
+/**
+ * Says when the running version was built.
+ *
+ * public/version.json is written by the build, so it is absent when the page
+ * is served straight off disk — that is what "running locally" means here.
+ * Fetched rather than baked into the markup so index.html is the same file in
+ * the repo and in production.
+ */
+async function showVersion() {
+  const label = $("version");
+  try {
+    const response = await fetch("/version.json", { cache: "no-store" });
+    if (!response.ok) throw new Error(String(response.status));
+    const { builtAt, commit } = await response.json();
+    const when = new Date(builtAt).toLocaleString("en-GB", {
+      day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+    label.textContent = `Updated ${when}${commit ? ` · ${commit}` : ""}`;
+  } catch {
+    label.textContent = "Running locally";
+  }
+}
+
 // --- theme ----------------------------------------------------------------
 
 /**
@@ -409,7 +434,9 @@ const showCatalogueState = () => guard(async () => {
     label.textContent = "no colours indexed yet — run npm run catalogue.";
     return;
   }
-  const when = new Date(cat.builtAt).toLocaleDateString("en-GB");
+  const when = new Date(cat.builtAt).toLocaleString("en-GB", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
   label.textContent = `${cat.colourCount} colours, indexed ${when}.`;
 });
 
@@ -564,6 +591,7 @@ $("discount-kind").addEventListener("change", (event) => {
 // the lock dialog, and unlocking picks up from there.
 renderTheme();
 renderWhoami();
+showVersion();
 guard(async () => {
   state = await api("/state");
   askName(); // before anything else: everything is filed under it

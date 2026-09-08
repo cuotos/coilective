@@ -7,3 +7,6 @@ deno.lock
 
 # the shared password, for local dev only — never committed
 .env
+
+# written by the build; says when the deploy was made
+public/version.json

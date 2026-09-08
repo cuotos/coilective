@@ -118,10 +118,23 @@ export async function buildCatalogue({ fetchImpl = fetch, concurrency = 2 } = {}
     }
   });
 
+  // A second pass over whatever the store refused, one at a time and slowly.
+  // lookupWithRetry already backs off, but under a pool it is competing with
+  // its own siblings; alone with a few seconds' grace it usually gets through.
+  const recovered = [];
+  for (const { handle } of failed.splice(0)) {
+    await new Promise((r) => setTimeout(r, 3000));
+    try {
+      recovered.push(await lookupWithRetry(`https://uk.store.bambulab.com/products/${handle}`, fetchImpl));
+    } catch (err) {
+      failed.push({ handle, reason: err.message });
+    }
+  }
+
   const colours = {};
   let counted = 0;
 
-  for (const product of products.filter(Boolean)) {
+  for (const product of [...products, ...recovered].filter(Boolean)) {
     const coded = product.variants.filter((v) => COLOUR_CODE.test(v.label));
     if (coded.length === 0) continue; // not filament
     counted += 1;

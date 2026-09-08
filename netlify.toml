@@ -1,6 +1,10 @@
 [build]
   publish = "public"
   functions = "netlify/functions"
+  # Only job is to stamp the build time into public/version.json for the
+  # footer. Netlify has no "deployed at" variable, so the build is the one
+  # place that knows.
+  command = "node scripts/stamp-version.mjs"
 
 [dev]
   publish = "public"

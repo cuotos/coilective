@@ -111,8 +111,29 @@ export async function writeCatalogue(catalogue) {
     );
   }
 
-  await store().setJSON(CATALOGUE_KEY, catalogue);
-  return catalogue;
+  // Merged, never replaced. Which products the store rate-limits varies run to
+  // run, so a straight replace loses colours that were known five minutes ago
+  // — PETG Clear disappeared out from under an order that way. A colour the
+  // new build could not read keeps its previous entry, stamped with the build
+  // it came from so an old price is at least visible as old.
+  const previous = await readCatalogue();
+  const carried = Object.fromEntries(
+    Object.entries(previous?.colours ?? {}).map(([id, colour]) => [
+      id,
+      { ...colour, builtAt: colour.builtAt ?? previous.builtAt },
+    ]),
+  );
+  const merged = { ...carried, ...colours };
+
+  const next = {
+    ...catalogue,
+    colours: merged,
+    colourCount: Object.keys(merged).length,
+    carriedOver: Object.keys(merged).length - Object.keys(colours).length,
+  };
+
+  await store().setJSON(CATALOGUE_KEY, next);
+  return next;
 }
 
 export class NotFound extends Error {}

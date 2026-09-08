@@ -67,4 +67,7 @@ const response = await fetch(`${site}/api/catalogue`, {
 const result = await response.json();
 if (!response.ok) throw new Error(`upload failed: ${result.error ?? response.status}`);
 
-console.log(`done — ${result.colourCount} colours live, built ${result.builtAt}`);
+const carried = result.carriedOver
+  ? `, ${result.carriedOver} kept from an earlier build`
+  : "";
+console.log(`done — ${result.colourCount} colours live${carried}, built ${result.builtAt}`);

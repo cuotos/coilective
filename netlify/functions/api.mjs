@@ -133,6 +133,7 @@ export default async function handler(request) {
           builtAt: uploaded.builtAt,
           products: uploaded.products,
           colourCount: uploaded.colourCount,
+          carriedOver: uploaded.carriedOver ?? 0,
           failed: uploaded.failed ?? [],
         });
       }

@@ -68,6 +68,11 @@ rate-limits hard, so the build is paced slowly and takes about a minute; it
 reports any product it could not read rather than pretending the colour does
 not exist.
 
+Uploads merge rather than replace. Which products the store rate-limits varies
+run to run, so a straight replace loses colours that were known five minutes
+ago — PETG Clear disappeared out from under an order that way. A colour the new
+build could not read keeps its previous entry.
+
 The index is built from a UK machine and uploaded, because it cannot be built
 on the server — see below:
 
