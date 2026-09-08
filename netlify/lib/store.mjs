@@ -114,12 +114,52 @@ async function mutate(id, expectedRevision, change) {
   return next;
 }
 
-export async function createRound(name) {
+/**
+ * There is always exactly one open round, and it is the wishlist.
+ *
+ * Nobody starts a round: people add to the open one whenever they fancy
+ * something, and closing it is the act of ordering. So a close leaves nothing
+ * open, and the next read makes the successor — which means the wishlist is
+ * never missing, and never something you have to remember to create.
+ *
+ * Called from GET /api/state, so it is a read that can write. That is the
+ * trade for the invariant holding on a fresh site, after a delete, and
+ * straight after a close, rather than in only the cases someone remembered.
+ */
+export async function ensureOpenRound() {
+  const rounds = await readAllRounds();
+  const open = rounds.find((r) => r.status === "open");
+  if (open) return { open, rounds };
+
+  const created = await createRound(defaultRoundName(rounds));
+  return { open: created, rounds: [created, ...rounds] };
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sept", "Oct", "Nov", "Dec"];
+
+/**
+ * What to call a round nobody named. The month it started, which is how these
+ * get referred to anyway, with a number if that is taken.
+ */
+function defaultRoundName(existing) {
+  const now = new Date();
+  const base = `${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
+  const taken = new Set(existing.map((r) => r.name));
+  if (!taken.has(base)) return base;
+  for (let n = 2; n <= taken.size + 2; n += 1) {
+    if (!taken.has(`${base} (${n})`)) return `${base} (${n})`;
+  }
+  return `${base} (${now.getTime()})`; // unreachable in practice
+}
+
+async function createRound(name) {
   const trimmed = String(name ?? "").trim();
   if (!trimmed) throw new BadRequest("Give the round a name.");
 
-  const index = await readIndex();
-  if (index.rounds.some((r) => r.status === "open")) {
+  // The index holds ids and dates only, so this has to read the rounds
+  // themselves — asking the index for a status silently found nothing.
+  const rounds = await readAllRounds();
+  if (rounds.some((r) => r.status === "open")) {
     throw new BadRequest("There's already an open round. Close it before starting another.");
   }
 
@@ -137,6 +177,7 @@ export async function createRound(name) {
   };
 
   await writeRound(round);
+  const index = await readIndex();
   index.rounds.unshift({ id: round.id, createdAt: round.createdAt });
   await writeIndex(index);
   return round;
@@ -215,11 +256,21 @@ export async function closeRound(id, revision, { discount, shippingPence }) {
   });
 }
 
+/**
+ * Reopen a closed round — for a close that turned out to be premature.
+ *
+ * Closing spawns an empty successor, so by the time anyone reopens there is
+ * almost always one in the way. An empty round holds nothing anybody wants, so
+ * reopening absorbs it rather than refusing on its account. One with items in
+ * is somebody's wishlist and is left alone.
+ */
 export async function reopenRound(id, revision) {
-  const index = await readIndex();
-  if (index.rounds.some((r) => r.status === "open" && r.id !== id)) {
-    throw new BadRequest("Another round is open. Close it first.");
+  const rounds = await readAllRounds();
+  const others = rounds.filter((r) => r.status === "open" && r.id !== id);
+  if (others.some((r) => r.items.length > 0)) {
+    throw new BadRequest("Another round is open with things in it. Close that one first.");
   }
+  for (const empty of others) await deleteRound(empty.id);
   return mutate(id, revision, (r) => {
     r.status = "open";
     r.closedAt = null;

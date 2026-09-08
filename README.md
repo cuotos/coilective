@@ -43,9 +43,17 @@ netlify/lib/catalogue.mjs    the colour-code index
 netlify/lib/store.mjs        Blobs persistence
 ```
 
-A **round** is one group order: it opens, people add items, it closes with
-whatever discount and postage applied. Closed rounds stay readable so you can
-still see who owed what.
+A **round** is one group order. There is always exactly one open, and it is
+the wishlist: people add to it whenever they fancy something, and closing it is
+the act of ordering. A close therefore leaves nothing open, so the next read
+makes the successor — nobody has to remember to start one.
+
+Rounds are named after the month they began, with a number if that is taken,
+and can be renamed to whatever people actually call them. Closed rounds stay
+readable so you can still see who owed what.
+
+Reopening a closed round absorbs the empty successor standing in its way. One
+with items in it is somebody's wishlist and is left alone.
 
 ### Prices come from the store
 

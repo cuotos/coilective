@@ -10,7 +10,6 @@
  *   POST   /api/lookup                         { url } or { id } → variants
  *   GET    /api/catalogue                      what the colour index knows
  *   POST   /api/catalogue                      start a rebuild (202; poll GET)
- *   POST   /api/rounds                         { name } → new open round
  *   GET    /api/rounds/:id                     one round, settled
  *   POST   /api/rounds/:id/items               add an item
  *   PATCH  /api/rounds/:id/items/:itemId       { qty } or { discounted }
@@ -26,7 +25,7 @@ import { lookupProduct } from "../lib/bambu.mjs";
 import { findColour } from "../lib/catalogue.mjs";
 import { settleRound } from "../lib/money.mjs";
 import {
-  readAllRounds, readRound, createRound, addItem, removeItem, setQty,
+  ensureOpenRound, readRound, addItem, removeItem, setQty,
   closeRound, reopenRound, renameRound, deleteRound, setDiscounted,
   readCatalogue, NotFound, Conflict, BadRequest,
 } from "../lib/store.mjs";
@@ -70,11 +69,11 @@ export default async function handler(request) {
     // GET /api/state
     if (method === "GET" && parts[0] === "state") {
       // Summaries are derived from the rounds, never cached in the index, so
-      // the list can't show a name a round no longer has.
-      const all = await readAllRounds();
-      const open = all.find((r) => r.status === "open");
+      // the list can't show a name a round no longer has. There is always an
+      // open round to show — this is what creates it if a close left none.
+      const { open, rounds: all } = await ensureOpenRound();
       return json({
-        open: open ? withTotals(open) : null,
+        open: withTotals(open),
         rounds: all.map((r) => ({
           id: r.id,
           name: r.name,
@@ -138,12 +137,8 @@ export default async function handler(request) {
     if (parts[0] === "rounds") {
       const [, id, section, itemId] = parts;
 
-      // POST /api/rounds
-      if (method === "POST" && !id) {
-        const { name } = await body();
-        return json(withTotals(await createRound(name)), 201);
-      }
-
+      // No route to create one: the open round is made by /api/state when a
+      // close leaves none, so there is nothing for a caller to start.
       if (!id) return json({ error: "Not found." }, 404);
 
       // GET /api/rounds/:id

@@ -186,22 +186,15 @@ function render() {
   renderWhoami();
   const round = shown();
 
+  // The server guarantees an open round, so this only shows before the first
+  // response has landed.
   if (!round) {
-    $("round-name").textContent = "No round open";
+    $("round-name").textContent = "Loading…";
     $("round-status").hidden = true;
+    $("rename-round").hidden = true;
     $("add-form").hidden = true;
     $("close-round").hidden = true;
     $("reopen-round").hidden = true;
-    $("items").innerHTML = `
-      <p class="empty">Nothing on the go. Start one when you next want to club together.</p>
-      <div class="row">
-        <input class="grow" id="new-name" placeholder="e.g. September order">
-        <button class="primary" id="new-round" type="button">Start a round</button>
-      </div>`;
-    $("totals").innerHTML = "";
-    $("new-round").addEventListener("click", startRound);
-    $("new-name").addEventListener("keydown", (e) => e.key === "Enter" && startRound());
-    renderHistory();
     return;
   }
 
@@ -210,6 +203,7 @@ function render() {
   $("round-status").hidden = false;
   $("round-status").textContent = open ? "open" : "closed";
   $("round-status").className = `pill ${open ? "pill-open" : "pill-closed"}`;
+  $("rename-round").hidden = false;
   $("add-form").hidden = !open;
   $("close-round").hidden = !open;
   $("reopen-round").hidden = open;
@@ -360,12 +354,24 @@ const refresh = () => guard(async () => {
   render();
 });
 
-const startRound = () => guard(async () => {
-  const name = $("new-name").value.trim();
-  if (!name) return showError("Give the round a name first.");
-  state.open = await api("/rounds", { method: "POST", body: JSON.stringify({ name }) });
+/**
+ * Rename the round on screen.
+ *
+ * Rounds are auto-named after the month they started, so this is how one gets
+ * called what people actually call it. It also renames a closed round, since
+ * that is usually when you realise "Sept 2026" was the big PLA order.
+ */
+const renameRound = () => guard(async () => {
+  const round = shown();
+  const name = prompt("Call this round what?", round.name);
+  if (name === null || !name.trim() || name.trim() === round.name) return;
+
+  const updated = await api(`/rounds/${round.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ revision: round.revision, name: name.trim() }),
+  });
+  if (viewing) viewing = updated;
   state = await api("/state");
-  viewing = null;
   render();
 });
 
@@ -548,6 +554,7 @@ $("close-cancel").addEventListener("click", () => $("close-dialog").close());
 $("close-confirm").addEventListener("click", confirmClose);
 $("reopen-round").addEventListener("click", doReopen);
 $("change-name").addEventListener("click", () => askName({ force: true }));
+$("rename-round").addEventListener("click", renameRound);
 $("theme-toggle").addEventListener("click", () => setTheme(theme() === "dark" ? "light" : "dark"));
 $("lock-save").addEventListener("click", unlock);
 $("lock-input").addEventListener("keydown", (e) => e.key === "Enter" && unlock());
