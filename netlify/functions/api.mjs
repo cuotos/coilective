@@ -9,7 +9,7 @@
  *   GET    /api/state                          everything the page needs
  *   POST   /api/lookup                         { url } or { id } → variants
  *   GET    /api/catalogue                      what the colour index knows
- *   POST   /api/catalogue                      start a rebuild (202; poll GET)
+ *   PUT    /api/catalogue                      upload one built on a UK machine
  *   GET    /api/rounds/:id                     one round, settled
  *   POST   /api/rounds/:id/items               add an item
  *   PATCH  /api/rounds/:id/items/:itemId       { qty } or { discounted }
@@ -27,7 +27,7 @@ import { settleRound } from "../lib/money.mjs";
 import {
   ensureOpenRound, readRound, addItem, removeItem, setQty,
   closeRound, reopenRound, renameRound, deleteRound, setDiscounted,
-  readCatalogue, NotFound, Conflict, BadRequest,
+  readCatalogue, writeCatalogue, NotFound, Conflict, BadRequest,
 } from "../lib/store.mjs";
 
 export const config = { path: "/api/*" };
@@ -92,7 +92,9 @@ export default async function handler(request) {
       if (id) {
         const catalogue = await readCatalogue();
         if (!catalogue) {
-          throw new BadRequest("The colour catalogue hasn't been built yet. Refresh it first.");
+          throw new BadRequest(
+            "The colour catalogue hasn't been uploaded yet. Run `npm run catalogue` from a UK machine.",
+          );
         }
         try {
           return json(findColour(catalogue, id));
@@ -119,18 +121,20 @@ export default async function handler(request) {
           : { builtAt: null, products: 0, colourCount: 0, failed: [] });
       }
 
-      // POST /api/catalogue — start a rebuild and return immediately.
-      // The work itself is far too slow for a synchronous function.
-      if (method === "POST") {
-        const target = new URL("/.netlify/functions/catalogue-refresh-background", request.url);
-        // Deliberately not awaited: the background function reports via its
-        // own 202 and the page polls GET /api/catalogue for the result.
-        fetch(target, {
-          method: "POST",
-          // The background function checks the password too, so pass ours on.
-          headers: { cookie: request.headers.get("cookie") ?? "" },
-        }).catch((err) => console.error(err));
-        return json({ started: true }, 202);
+      // PUT /api/catalogue — take one built elsewhere.
+      //
+      // Not built here: the store quotes prices by the caller's IP, and
+      // Netlify's free-plan functions run in Ohio, where that means dollars.
+      // `npm run catalogue` builds it from a UK machine and posts it up;
+      // writeCatalogue refuses one that is not in sterling.
+      if (method === "PUT") {
+        const uploaded = await writeCatalogue(await body());
+        return json({
+          builtAt: uploaded.builtAt,
+          products: uploaded.products,
+          colourCount: uploaded.colourCount,
+          failed: uploaded.failed ?? [],
+        });
       }
     }
 

@@ -395,17 +395,22 @@ const doLookup = () => guard(async () => {
 });
 
 /** How many colours the index knows, and an offer to build it if it's empty. */
+/**
+ * Says what the colour index knows, with no button to rebuild it.
+ *
+ * It cannot be rebuilt from here: the store prices by the caller's IP and
+ * these functions run in Ohio, so a rebuild from the site would come back in
+ * dollars. It is built from a UK machine with `npm run catalogue` instead.
+ */
 const showCatalogueState = () => guard(async () => {
   const cat = await api("/catalogue");
   const label = $("catalogue-state");
   if (!cat.builtAt) {
-    label.innerHTML = `no colours indexed yet. <button class="quiet" id="build-catalogue" type="button">Build the index</button>`;
-  } else {
-    const when = new Date(cat.builtAt).toLocaleDateString("en-GB");
-    label.innerHTML = `${cat.colourCount} colours indexed on ${when}. `
-      + `<button class="quiet" id="build-catalogue" type="button">Refresh</button>`;
+    label.textContent = "no colours indexed yet — run npm run catalogue.";
+    return;
   }
-  $("build-catalogue").addEventListener("click", buildCatalogue);
+  const when = new Date(cat.builtAt).toLocaleDateString("en-GB");
+  label.textContent = `${cat.colourCount} colours, indexed ${when}.`;
 });
 
 /**
@@ -414,32 +419,6 @@ const showCatalogueState = () => guard(async () => {
  * The build is paced slowly on purpose — the store rate-limits — so it runs as
  * a background function and we poll for `builtAt` to move.
  */
-const buildCatalogue = () => guard(async () => {
-  const button = $("build-catalogue");
-  const before = (await api("/catalogue")).builtAt;
-
-  button.disabled = true;
-  button.textContent = "Building…";
-  await api("/catalogue", { method: "POST", body: JSON.stringify({}) });
-
-  const deadline = Date.now() + 180_000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const now = await api("/catalogue");
-    if (now.builtAt && now.builtAt !== before) {
-      await showCatalogueState();
-      if (now.failed?.length) {
-        showError(`Indexed ${now.colourCount} colours, but ${now.failed.length} product(s) `
-          + `couldn't be read: ${now.failed.map((f) => f.handle).join(", ")}. `
-          + `Refreshing again usually picks them up.`);
-      }
-      return;
-    }
-  }
-  await showCatalogueState();
-  showError("The rebuild is taking longer than expected. Reload in a minute to see where it got to.");
-});
-
 function openVariantDialog() {
   $("variant-title").textContent = pending.productName;
   $("variant-select").innerHTML = pending.variants.map((v, i) =>

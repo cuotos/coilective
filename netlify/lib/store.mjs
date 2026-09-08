@@ -86,7 +86,31 @@ export async function readCatalogue() {
   return store().get(CATALOGUE_KEY, { type: "json" });
 }
 
+/**
+ * Accepts a catalogue built somewhere else, and checks it before trusting it.
+ *
+ * The build has to run from a UK connection — Netlify's free-plan functions
+ * are in Ohio, where the store quotes dollars — so it is built on a laptop and
+ * uploaded. That makes this the boundary where a bad catalogue would otherwise
+ * get in, so the currency of every variant is checked here rather than being
+ * discovered later in someone's total.
+ */
 export async function writeCatalogue(catalogue) {
+  const colours = catalogue?.colours;
+  if (!catalogue?.builtAt || !colours || typeof colours !== "object") {
+    throw new BadRequest("That doesn't look like a catalogue.");
+  }
+
+  const wrong = Object.values(colours)
+    .flatMap((colour) => colour.variants ?? [])
+    .find((variant) => variant.currency !== "GBP");
+  if (wrong) {
+    throw new BadRequest(
+      `This catalogue has ${wrong.currency ?? "unpriced"} variants in it. `
+      + `It has to be built from a UK connection.`,
+    );
+  }
+
   await store().setJSON(CATALOGUE_KEY, catalogue);
   return catalogue;
 }

@@ -63,10 +63,18 @@ Paste a product link and pick a colour, or type the five-digit code printed on
 the spool — `11100` is PLA Matte Ivory White.
 
 Codes are resolved through an index built from the store's own sitemap, so a
-new colour appears after a refresh with nothing to edit here. The store
-rate-limits hard, so the build is paced slowly and runs as a background
-function; it reports any product it could not read rather than pretending the
-colour does not exist.
+new colour appears after a rebuild with nothing to edit here. The store
+rate-limits hard, so the build is paced slowly and takes about a minute; it
+reports any product it could not read rather than pretending the colour does
+not exist.
+
+The index is built from a UK machine and uploaded, because it cannot be built
+on the server — see below:
+
+```bash
+npm run catalogue                          # to the live site
+npm run catalogue -- http://localhost:8888
+```
 
 The price captured is the one showing when the item was added. That is what
 the order actually cost, so it is not re-fetched later.
@@ -84,10 +92,15 @@ price got added into a sterling total once. `addItem` refuses anything that
 is not GBP as a last line of defence, whichever route the item arrived by,
 because the settlement maths adds prices together and never looks at currency.
 
-This is a live constraint, not just a guard: Netlify's serverless functions
-run in Ohio on the free plan, so they cannot read UK prices at all. Pinning
-the region needs a Pro plan; the free route is an edge function, which runs
-near the visitor.
+This is a live constraint, not just a guard. Nothing on Netlify's free plan
+can read a UK price: functions run in Ohio, and edge functions — which do run
+near the visitor — egress via the EU, so the store sends them to `eu.store`
+and quotes euros. Pinning functions to London needs a Pro plan.
+
+So the index is built on a laptop in the UK and uploaded through
+`PUT /api/catalogue`, and `writeCatalogue` refuses one that is not in
+sterling. Prices are therefore as at the last rebuild rather than as at the
+moment of adding — rebuild before an order round and they match.
 
 ### Money
 

@@ -5,7 +5,8 @@
   "description": "Group filament orders: a shared wishlist and who owes what",
   "scripts": {
     "dev": "netlify dev",
-    "test": "node --test \"netlify/lib/*.test.mjs\""
+    "test": "node --test \"netlify/lib/*.test.mjs\"",
+    "catalogue": "node scripts/catalogue.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0"
