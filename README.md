@@ -71,6 +71,24 @@ colour does not exist.
 The price captured is the one showing when the item was added. That is what
 the order actually cost, so it is not re-fetched later.
 
+### Prices are the UK ones, or there is no price
+
+Bambu run a storefront per region and Cloudflare redirects you to the one
+matching your IP, so the same URL is £17.99 from Manchester and $21.99 from
+Ohio. Since everything settles in sterling, the redirect is never followed:
+a lookup that lands anywhere but the UK store fails and says why, and any
+regional link is rewritten to `uk.store` before fetching.
+
+Nothing defaults a missing currency to GBP — that is exactly how a dollar
+price got added into a sterling total once. `addItem` refuses anything that
+is not GBP as a last line of defence, whichever route the item arrived by,
+because the settlement maths adds prices together and never looks at currency.
+
+This is a live constraint, not just a guard: Netlify's serverless functions
+run in Ohio on the free plan, so they cannot read UK prices at all. Pinning
+the region needs a Pro plan; the free route is an edge function, which runs
+near the visitor.
+
 ### Money
 
 Integer pence everywhere. Prices arrive as strings like `"17.99"`, get parsed

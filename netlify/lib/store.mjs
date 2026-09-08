@@ -200,6 +200,16 @@ export async function addItem(id, revision, item) {
   }
   if (unitPricePence < 0) throw new BadRequest("A price can't be negative.");
 
+  // Everything downstream adds prices together and never looks at currency, so
+  // one dollar figure would be summed into a sterling total as if it matched.
+  // This is where that stops, whatever route the item arrived by.
+  const currency = item.currency ?? "GBP";
+  if (currency !== "GBP") {
+    throw new BadRequest(
+      `That price is in ${currency}, not pounds. Prices have to come from the UK store.`,
+    );
+  }
+
   return mutate(id, revision, (round) => {
     if (round.status !== "open") throw new BadRequest("That round is closed.");
     round.items.push({
@@ -209,7 +219,7 @@ export async function addItem(id, revision, item) {
       productName: String(item.productName ?? "").trim() || "Unnamed item",
       variant: String(item.variant ?? "").trim() || null,
       unitPricePence,
-      currency: item.currency ?? "GBP",
+      currency,
       qty,
       // Whether the round's discount applies to this item. Defaults to yes,
       // since store-wide sales are the common case.

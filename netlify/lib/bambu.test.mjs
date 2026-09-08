@@ -7,10 +7,17 @@ test("accepts Bambu store links and strips tracking", () => {
     assertBambuUrl("https://uk.store.bambulab.com/products/pla-basic-filament?variant=42&utm_source=x"),
     "https://uk.store.bambulab.com/products/pla-basic-filament",
   );
-  assert.equal(
-    assertBambuUrl("https://eu.store.bambulab.com/products/petg-hf"),
-    "https://eu.store.bambulab.com/products/petg-hf",
-  );
+});
+
+test("rewrites any regional store to the UK one", () => {
+  // The price has to be the sterling one whichever storefront the link came
+  // from, so a friend pasting a us.store link still gets UK pricing.
+  for (const host of ["eu", "us", "au", "ca"]) {
+    assert.equal(
+      assertBambuUrl(`https://${host}.store.bambulab.com/products/petg-hf`),
+      "https://uk.store.bambulab.com/products/petg-hf",
+    );
+  }
 });
 
 test("refuses anything that is not the Bambu store", () => {
@@ -106,8 +113,50 @@ test("survives a malformed JSON-LD block alongside a good one", async () => {
   const html = `<html>
     <script type="application/ld+json">{ not json </script>
     <script type="application/ld+json">${JSON.stringify({
-      "@type": "Product", name: "Fine", offers: { price: "1.00" },
+      "@type": "Product", name: "Fine", offers: { price: "1.00", priceCurrency: "GBP" },
     })}</script></html>`;
   const result = await lookupProduct("https://uk.store.bambulab.com/products/x", { fetchImpl: stub(html) });
   assert.equal(result.productName, "Fine");
+});
+
+test("refuses a redirect off the UK store rather than following it", async () => {
+  // The store redirects to whichever regional site matches the caller's IP.
+  // Following it returns another country's prices in another currency, which
+  // would then be summed into a sterling total.
+  await assert.rejects(
+    () => lookupProduct("https://uk.store.bambulab.com/products/pla-matte", {
+      fetchImpl: async () => new Response("", {
+        status: 302,
+        headers: { location: "https://us.store.bambulab.com/products/pla-matte" },
+      }),
+    }),
+    /instead of the UK site/,
+  );
+});
+
+test("refuses prices that are not in pounds", async () => {
+  await assert.rejects(
+    () => lookupProduct("https://uk.store.bambulab.com/products/pla-pure", {
+      fetchImpl: stub(page({
+        "@type": "ProductGroup",
+        name: "PLA Pure",
+        hasVariant: [{
+          name: "PLA Pure - Apricot (17300) / Refill / 1kg",
+          offers: { price: "21.99", priceCurrency: "USD", availability: "https://schema.org/InStock" },
+        }],
+      })),
+    }),
+    /USD, not pounds/,
+  );
+});
+
+test("refuses a price with no stated currency", async () => {
+  // A missing currency is unknown, not sterling. Defaulting it to GBP is how
+  // dollars got into a total in the first place.
+  await assert.rejects(
+    () => lookupProduct("https://uk.store.bambulab.com/products/x", {
+      fetchImpl: stub(page({ "@type": "Product", name: "Mystery", offers: { price: "9.99" } })),
+    }),
+    /no stated currency/,
+  );
 });

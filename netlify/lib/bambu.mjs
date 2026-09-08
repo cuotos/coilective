@@ -15,6 +15,18 @@ import { toPence } from "./money.mjs";
 
 const ALLOWED_HOST = /(^|\.)bambulab\.com$/;
 
+/**
+ * Prices come from the UK store or not at all.
+ *
+ * Bambu run a storefront per region and Cloudflare redirects you to the one
+ * matching your IP, so the same URL is £17.99 from Manchester and $21.99 from
+ * Ohio. We settle up in sterling, so any regional link is rewritten to the UK
+ * store rather than trusted as given — paste a us.store link and you still get
+ * the UK price.
+ */
+const UK_STORE = "uk.store.bambulab.com";
+const REGIONAL_STORE = /^[a-z]{2}\.store\.bambulab\.com$/;
+
 /** Rejects anything that isn't a Bambu store URL, so this can't be used as a proxy. */
 export function assertBambuUrl(raw) {
   let url;
@@ -27,8 +39,9 @@ export function assertBambuUrl(raw) {
   if (!ALLOWED_HOST.test(url.hostname)) {
     throw new Error("That's not a bambulab.com link. Only the Bambu store is supported.");
   }
+  const host = REGIONAL_STORE.test(url.hostname) ? UK_STORE : url.hostname;
   // Drop tracking and variant params so the same product isn't cached twice.
-  return `${url.origin}${url.pathname}`;
+  return `https://${host}${url.pathname}`;
 }
 
 /** Every `<script type="application/ld+json">` on the page, parsed. */
@@ -66,7 +79,9 @@ function variantsOf(node) {
       return {
         label: label || full,
         pricePence,
-        currency: offer.priceCurrency ?? "GBP",
+        // No default: a missing currency is unknown, not sterling. Claiming
+        // GBP here is how dollars end up added into a sterling total.
+        currency: offer.priceCurrency ?? null,
         inStock: String(offer.availability ?? "").endsWith("InStock"),
       };
     })
@@ -85,10 +100,21 @@ export async function lookupProduct(rawUrl, { fetchImpl = fetch } = {}) {
   try {
     response = await fetchImpl(url, {
       headers: { "user-agent": "coilective (group order tracker)" },
+      // Not followed on purpose. The store redirects to whichever regional
+      // storefront matches the caller's IP, and following that quietly
+      // returns another country's prices in another country's currency.
+      redirect: "manual",
       signal: AbortSignal.timeout(10_000),
     });
   } catch (err) {
     throw new Error(`Couldn't reach the Bambu store: ${err.message}`);
+  }
+  if (response.status >= 300 && response.status < 400) {
+    const to = response.headers.get("location") ?? "somewhere else";
+    throw new Error(
+      `The store sent us to ${to} instead of the UK site, so the price would be `
+      + `in the wrong currency. That happens when the request doesn't come from the UK.`,
+    );
   }
   if (!response.ok) {
     throw new Error(`The Bambu store returned ${response.status} for that link.`);
@@ -103,6 +129,16 @@ export async function lookupProduct(rawUrl, { fetchImpl = fetch } = {}) {
   const variants = variantsOf(product);
   if (variants.length === 0) {
     throw new Error("Found the product but none of its prices. Add it by hand.");
+  }
+
+  // Belt and braces behind the redirect check: the UK store could in principle
+  // quote something other than sterling, and that must not reach a total.
+  const wrong = variants.find((v) => v.currency !== "GBP");
+  if (wrong) {
+    throw new Error(
+      `That page quotes prices in ${wrong.currency ?? "no stated currency"}, not pounds. `
+      + `Only UK store prices can be used.`,
+    );
   }
 
   return { productName: String(product.name ?? "Unknown product"), url, variants };
