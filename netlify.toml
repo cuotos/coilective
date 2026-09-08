@@ -1,0 +1,9 @@
+[build]
+  publish = "public"
+  functions = "netlify/functions"
+
+[dev]
+  publish = "public"
+  targetPort = 8888
+
+# The single API function claims every /api/* path and routes internally.

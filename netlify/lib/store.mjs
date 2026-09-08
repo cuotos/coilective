@@ -1,0 +1,273 @@
+/**
+ * Persistence, on Netlify Blobs.
+ *
+ * One blob per round, plus an `index` blob listing which rounds exist. The
+ * index holds ids and creation dates only — never a name or a status. Those
+ * live on the round, and duplicating them into the index meant the two could
+ * disagree, which they promptly did. A round is always read and written whole,
+ * so there is no partial state to keep consistent either.
+ *
+ * Blobs has no transactions, so two people writing the same round at the same
+ * moment means the later write wins. Every mutation therefore takes a
+ * `revision` the caller last saw and refuses if it has moved on, which turns a
+ * silent lost update into a "someone else just changed this, reload" message.
+ */
+
+import { getStore } from "@netlify/blobs";
+import { toPence } from "./money.mjs";
+
+const STORE = "coilective";
+const INDEX_KEY = "index";
+const CATALOGUE_KEY = "catalogue";
+
+const store = () => getStore(STORE);
+
+function newId() {
+  const now = new Date();
+  const stamp = now.toISOString().slice(0, 10);
+  return `${stamp}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Which rounds exist, newest first. Ids and dates only.
+ *
+ * Older indexes also carried `name` and `status`; those are ignored so a
+ * stale copy cannot resurface.
+ */
+export async function readIndex() {
+  const index = await store().get(INDEX_KEY, { type: "json" });
+  const rounds = (index?.rounds ?? []).map(({ id, createdAt }) => ({ id, createdAt }));
+  return { rounds };
+}
+
+/**
+ * Every round, in full, newest first.
+ *
+ * Reads one blob per round rather than trusting a summary. With a round or two
+ * a month that is a handful of reads, and it is the only way the list cannot
+ * be out of date.
+ */
+export async function readAllRounds() {
+  const { rounds } = await readIndex();
+  const all = await Promise.all(rounds.map((r) => readRound(r.id).catch(() => null)));
+  return all.filter(Boolean);
+}
+
+async function writeIndex(index) {
+  await store().setJSON(INDEX_KEY, index);
+}
+
+export async function readRound(id) {
+  const round = await store().get(`round/${id}`, { type: "json" });
+  if (!round) throw new NotFound(`No round called ${id}.`);
+  return round;
+}
+
+async function writeRound(round) {
+  await store().setJSON(`round/${round.id}`, round);
+}
+
+/**
+ * The filament catalogue, cached.
+ *
+ * Building it costs ~50 fetches against a store that rate-limits, so it is
+ * built rarely and read often.
+ */
+export async function readCatalogue() {
+  return store().get(CATALOGUE_KEY, { type: "json" });
+}
+
+export async function writeCatalogue(catalogue) {
+  await store().setJSON(CATALOGUE_KEY, catalogue);
+  return catalogue;
+}
+
+export class NotFound extends Error {}
+export class Conflict extends Error {}
+export class BadRequest extends Error {}
+
+/**
+ * Applies `change` to a round and saves it.
+ *
+ * `expectedRevision` is what the caller last read. If the stored round has
+ * moved on, nothing is written — better a refresh than a silently discarded
+ * addition.
+ */
+async function mutate(id, expectedRevision, change) {
+  const round = await readRound(id);
+  if (expectedRevision !== undefined && round.revision !== expectedRevision) {
+    throw new Conflict("Someone else changed this round. Reload and try again.");
+  }
+  const next = change(structuredClone(round));
+  next.revision = (round.revision ?? 0) + 1;
+  next.updatedAt = new Date().toISOString();
+  await writeRound(next);
+  return next;
+}
+
+export async function createRound(name) {
+  const trimmed = String(name ?? "").trim();
+  if (!trimmed) throw new BadRequest("Give the round a name.");
+
+  const index = await readIndex();
+  if (index.rounds.some((r) => r.status === "open")) {
+    throw new BadRequest("There's already an open round. Close it before starting another.");
+  }
+
+  const round = {
+    id: newId(),
+    name: trimmed,
+    status: "open",
+    revision: 1,
+    discount: null,
+    shippingPence: 0,
+    items: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    closedAt: null,
+  };
+
+  await writeRound(round);
+  index.rounds.unshift({ id: round.id, createdAt: round.createdAt });
+  await writeIndex(index);
+  return round;
+}
+
+export async function addItem(id, revision, item) {
+  const person = String(item.person ?? "").trim();
+  if (!person) throw new BadRequest("Say who this is for.");
+
+  const qty = Number(item.qty ?? 1);
+  if (!Number.isInteger(qty) || qty < 1 || qty > 99) throw new BadRequest("Quantity must be 1–99.");
+
+  let unitPricePence;
+  try {
+    unitPricePence = typeof item.unitPricePence === "number"
+      ? Math.round(item.unitPricePence)
+      : toPence(item.unitPrice);
+  } catch {
+    throw new BadRequest("That price doesn't look like a number.");
+  }
+  if (unitPricePence < 0) throw new BadRequest("A price can't be negative.");
+
+  return mutate(id, revision, (round) => {
+    if (round.status !== "open") throw new BadRequest("That round is closed.");
+    round.items.push({
+      id: `item-${Math.random().toString(36).slice(2, 9)}`,
+      person,
+      url: item.url ?? null,
+      productName: String(item.productName ?? "").trim() || "Unnamed item",
+      variant: String(item.variant ?? "").trim() || null,
+      unitPricePence,
+      currency: item.currency ?? "GBP",
+      qty,
+      // Whether the round's discount applies to this item. Defaults to yes,
+      // since store-wide sales are the common case.
+      discounted: item.discounted !== false,
+      addedAt: new Date().toISOString(),
+      priceCheckedAt: item.url ? new Date().toISOString() : null,
+    });
+    return round;
+  });
+}
+
+export async function removeItem(id, revision, itemId) {
+  return mutate(id, revision, (round) => {
+    if (round.status !== "open") throw new BadRequest("That round is closed.");
+    const before = round.items.length;
+    round.items = round.items.filter((i) => i.id !== itemId);
+    if (round.items.length === before) throw new NotFound("That item is already gone.");
+    return round;
+  });
+}
+
+export async function setQty(id, revision, itemId, qty) {
+  const n = Number(qty);
+  if (!Number.isInteger(n) || n < 1 || n > 99) throw new BadRequest("Quantity must be 1–99.");
+  return mutate(id, revision, (round) => {
+    if (round.status !== "open") throw new BadRequest("That round is closed.");
+    const item = round.items.find((i) => i.id === itemId);
+    if (!item) throw new NotFound("That item is gone.");
+    item.qty = n;
+    return round;
+  });
+}
+
+/** Closing is when the discount and postage are known, so they are set here. */
+export async function closeRound(id, revision, { discount, shippingPence }) {
+  return mutate(id, revision, (r) => {
+    if (r.status === "closed") throw new BadRequest("That round is already closed.");
+    if (r.items.length === 0) throw new BadRequest("Nothing in this round to close.");
+    r.discount = normaliseDiscount(discount);
+    r.shippingPence = Math.max(0, Math.round(Number(shippingPence) || 0));
+    r.status = "closed";
+    r.closedAt = new Date().toISOString();
+    return r;
+  });
+}
+
+export async function reopenRound(id, revision) {
+  const index = await readIndex();
+  if (index.rounds.some((r) => r.status === "open" && r.id !== id)) {
+    throw new BadRequest("Another round is open. Close it first.");
+  }
+  return mutate(id, revision, (r) => {
+    r.status = "open";
+    r.closedAt = null;
+    return r;
+  });
+}
+
+/** Marks an item in or out of the round's discount. */
+export async function setDiscounted(id, revision, itemId, discounted) {
+  return mutate(id, revision, (round) => {
+    if (round.status !== "open") throw new BadRequest("That round is closed.");
+    const item = round.items.find((i) => i.id === itemId);
+    if (!item) throw new NotFound("That item is gone.");
+    item.discounted = discounted !== false;
+    return round;
+  });
+}
+
+/** Renames a round. The name lives only here, so nothing else needs updating. */
+export async function renameRound(id, revision, name) {
+  const trimmed = String(name ?? "").trim();
+  if (!trimmed) throw new BadRequest("A round needs a name.");
+  return mutate(id, revision, (round) => {
+    round.name = trimmed;
+    return round;
+  });
+}
+
+/** Removes a round and its index entry. There is no undo. */
+export async function deleteRound(id) {
+  const round = await readRound(id); // 404s rather than silently succeeding
+  await store().delete(`round/${id}`);
+
+  const index = await readIndex();
+  index.rounds = index.rounds.filter((r) => r.id !== id);
+  await writeIndex(index);
+  return { deleted: round.id, name: round.name };
+}
+
+function normaliseDiscount(discount) {
+  if (!discount || discount.kind === "none") return null;
+  if (discount.kind === "percent") {
+    const value = Number(discount.value);
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      throw new BadRequest("A percentage discount has to be between 0 and 100.");
+    }
+    return { kind: "percent", value };
+  }
+  if (discount.kind === "amount") {
+    let pence;
+    try {
+      pence = typeof discount.pence === "number" ? Math.round(discount.pence) : toPence(discount.amount);
+    } catch {
+      throw new BadRequest("That discount doesn't look like an amount.");
+    }
+    if (pence < 0) throw new BadRequest("A discount can't be negative.");
+    return { kind: "amount", pence };
+  }
+  throw new BadRequest("Choose a percentage or an amount.");
+}

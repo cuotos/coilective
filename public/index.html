@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>coilective</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg:      #14161a;
+    --panel:   #1c1f25;
+    --raised:  #23272f;
+    --line:    #2e333c;
+    --ink:     #eef1f5;
+    --muted:   #9aa3b0;
+    --faint:   #6b7482;
+    --accent:  #4ade80;   /* filament green */
+    --accent-dim: #1d3a29;
+    --warn:    #fbbf24;
+    --danger:  #f87171;
+    --f-display: "Space Grotesk", system-ui, sans-serif;
+    --f-body:    "IBM Plex Sans", system-ui, sans-serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .shell { max-width: 60rem; margin: 0 auto; padding: 2rem 1.25rem 5rem; }
+
+  /* ---------- header ---------- */
+
+  header { display: flex; align-items: baseline; gap: 0.9rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+
+  h1 {
+    font-family: var(--f-display);
+    font-size: 1.9rem; font-weight: 700; letter-spacing: -0.03em;
+    margin: 0;
+  }
+  h1 .coil { color: var(--accent); }
+  h1#home { cursor: pointer; }
+  h1#home:hover .coil { filter: brightness(1.15); }
+
+  .tagline { color: var(--faint); font-size: 0.9rem; }
+
+  .whoami {
+    margin-left: auto; display: flex; align-items: center; gap: 0.5rem;
+    font-size: 0.875rem; color: var(--muted);
+  }
+  .whoami strong { color: var(--ink); }
+
+  /* ---------- panels ---------- */
+
+  section.panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 1.1rem 1.2rem;
+    margin-top: 1.25rem;
+  }
+
+  .panel-head {
+    display: flex; align-items: baseline; gap: 0.75rem; flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+  }
+  .panel-head h2 {
+    font-family: var(--f-display);
+    font-size: 1.1rem; font-weight: 700; letter-spacing: -0.01em; margin: 0;
+  }
+  .panel-head .sub { color: var(--faint); font-size: 0.85rem; }
+  .panel-head .spacer { margin-left: auto; }
+
+  .pill {
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; padding: 0.15rem 0.45rem; border-radius: 999px;
+  }
+  .pill-open   { color: var(--accent); background: var(--accent-dim); }
+  .pill-closed { color: var(--faint);  background: var(--raised); }
+
+  /* ---------- controls ---------- */
+
+  input, select, button {
+    font-family: var(--f-body); font-size: 0.9375rem; color: var(--ink);
+  }
+  input, select {
+    background: var(--raised); border: 1px solid var(--line);
+    border-radius: 8px; padding: 0.5rem 0.6rem; min-width: 0;
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px;
+  }
+  input::placeholder { color: var(--faint); }
+
+  button {
+    background: var(--raised); border: 1px solid var(--line);
+    border-radius: 8px; padding: 0.5rem 0.8rem; cursor: pointer;
+    font-weight: 500;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: 0.45; cursor: default; }
+
+  button.primary {
+    background: var(--accent); border-color: var(--accent);
+    color: #0b1f14; font-weight: 600;
+  }
+  button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+
+  button.quiet { background: none; border-color: transparent; color: var(--muted); padding: 0.3rem 0.45rem; }
+  button.quiet:hover:not(:disabled) { color: var(--ink); background: var(--raised); }
+  button.danger:hover:not(:disabled) { color: var(--danger); }
+
+  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+  .grow { flex: 1 1 16rem; }
+
+  /* ---------- add form ---------- */
+
+  .add-note { color: var(--faint); font-size: 0.85rem; margin: 0.55rem 0 0; }
+
+  /* ---------- items ---------- */
+
+  .person-block + .person-block { margin-top: 1.1rem; }
+
+  .person-head {
+    display: flex; align-items: baseline; gap: 0.6rem;
+    padding-bottom: 0.35rem; border-bottom: 1px solid var(--line);
+    margin-bottom: 0.35rem;
+  }
+  .person-head .name { font-weight: 600; }
+  .person-head .count { color: var(--faint); font-size: 0.85rem; }
+  .person-head .owes { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+  .item { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; }
+  .item + .item { border-top: 1px solid #21252c; }
+
+  .item .what { flex: 1 1 auto; min-width: 0; }
+  .item .product { font-weight: 500; }
+  .item .variant { color: var(--muted); font-size: 0.85rem; }
+  .item a { color: inherit; text-decoration-color: var(--faint); }
+
+  .item .qty { width: 3.6rem; text-align: center; padding: 0.3rem; }
+  .item .line {
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+    min-width: 5rem; text-align: right;
+  }
+
+  /* An item the round's discount doesn't apply to. */
+  .item.excluded .product, .item.excluded .variant { color: var(--faint); }
+  .sale-toggle {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    font-size: 0.75rem; color: var(--faint); cursor: pointer;
+    white-space: nowrap; user-select: none;
+  }
+  .sale-toggle input { margin: 0; accent-color: var(--accent); }
+  .sale-toggle.on { color: var(--accent); }
+
+  .no-sale-note { color: var(--faint); font-size: 0.8rem; }
+
+  .history li { display: flex; align-items: baseline; gap: 0.5rem; }
+  .history .grow-link { flex: 1 1 auto; }
+  .history .amount {
+    font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--muted);
+  }
+
+  /* ---------- totals ---------- */
+
+  .totals { display: grid; gap: 0.3rem; margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--line); }
+  .totals div { display: flex; gap: 1rem; }
+  .totals .label { color: var(--muted); }
+  .totals .value {
+    margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  }
+  .totals .grand { font-weight: 600; font-size: 1.05rem; }
+  .totals .grand .value { color: var(--accent); }
+
+  table.settle { width: 100%; border-collapse: collapse; margin-top: 0.4rem; }
+  table.settle th {
+    text-align: left; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--faint); font-weight: 600;
+    padding: 0 0.5rem 0.35rem 0; border-bottom: 1px solid var(--line);
+  }
+  table.settle td { padding: 0.4rem 0.5rem 0.4rem 0; border-bottom: 1px solid #21252c; }
+  table.settle td.num, table.settle th.num {
+    text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  }
+  table.settle tr:last-child td { border-bottom: none; }
+  table.settle td.owes { font-weight: 600; color: var(--accent); }
+
+  /* ---------- misc ---------- */
+
+  .empty { color: var(--faint); padding: 0.6rem 0; }
+
+  .error {
+    background: #3a1d1d; border: 1px solid #5b2a2a; color: #ffd9d9;
+    border-radius: 8px; padding: 0.6rem 0.75rem; margin-top: 0.75rem;
+    font-size: 0.9rem;
+  }
+
+  .history a { color: var(--muted); }
+  .history li { margin: 0.25rem 0; }
+  .history ul { list-style: none; padding: 0; margin: 0; }
+
+  dialog {
+    background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+    border-radius: 12px; padding: 1.1rem 1.2rem; max-width: 34rem; width: calc(100% - 2rem);
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.6); }
+  dialog h3 { font-family: var(--f-display); margin: 0 0 0.7rem; font-size: 1.05rem; }
+
+  footer { margin-top: 2.5rem; color: var(--faint); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <header>
+    <h1 id="home" title="Back to the current round"><span class="coil">coil</span>ective</h1>
+    <span class="tagline">group filament orders</span>
+    <span class="whoami" id="whoami" hidden>
+      you're <strong id="whoami-name"></strong>
+      <button class="quiet" id="change-name" type="button">change</button>
+    </span>
+  </header>
+
+  <div id="error" class="error" hidden></div>
+
+  <section class="panel" id="round-panel">
+    <div class="panel-head">
+      <h2 id="round-name">Loading…</h2>
+      <span class="pill" id="round-status" hidden></span>
+      <span class="spacer"></span>
+      <button id="close-round" type="button" hidden>Close round</button>
+      <button id="reopen-round" type="button" hidden>Reopen</button>
+    </div>
+
+    <div id="add-form" hidden>
+      <div class="row">
+        <input class="grow" id="url" type="text"
+               placeholder="Bambu product link, or a colour code like 11100">
+        <button class="primary" id="lookup" type="button">Add</button>
+      </div>
+      <p class="add-note">
+        Prices come from the store, so nobody types them in. A five-digit code
+        is the number on the spool &mdash; <span id="catalogue-state">checking the colour index&hellip;</span>
+      </p>
+    </div>
+
+    <div id="items"></div>
+    <div id="totals"></div>
+  </section>
+
+  <section class="panel history" id="history-panel" hidden>
+    <div class="panel-head"><h2>Past rounds</h2></div>
+    <ul id="history"></ul>
+  </section>
+
+  <footer>
+    Prices are whatever the store said when an item was added — that's what the
+    order actually cost. Discount and postage split in proportion to what each
+    person spent.
+  </footer>
+</div>
+
+<!-- pick a variant after a lookup -->
+<dialog id="variant-dialog">
+  <h3 id="variant-title">Pick one</h3>
+  <div class="row">
+    <select class="grow" id="variant-select"></select>
+    <input id="variant-qty" type="number" min="1" max="99" value="1" style="width:5rem">
+  </div>
+  <label class="sale-toggle on" id="variant-sale-label" style="margin-top:0.7rem">
+    <input type="checkbox" id="variant-sale" checked>
+    in the sale
+  </label>
+  <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
+    <button id="variant-cancel" type="button">Cancel</button>
+    <button class="primary" id="variant-add" type="button">Add to round</button>
+  </div>
+</dialog>
+
+<!-- close the round: discount and postage -->
+<dialog id="close-dialog">
+  <h3>Close the round</h3>
+  <p class="add-note" style="margin-top:0">
+    Enter what the order actually came to. Both split by spend.
+  </p>
+  <div class="row" style="margin-top:0.6rem">
+    <select id="discount-kind">
+      <option value="none">No discount</option>
+      <option value="percent">Percent off</option>
+      <option value="amount">Amount off</option>
+    </select>
+    <input id="discount-value" type="text" inputmode="decimal" placeholder="0" style="width:7rem" disabled>
+  </div>
+  <div class="row" style="margin-top:0.5rem">
+    <label for="shipping" style="color:var(--muted)">Postage</label>
+    <input id="shipping" type="text" inputmode="decimal" placeholder="0.00" style="width:7rem">
+  </div>
+  <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
+    <button id="close-cancel" type="button">Cancel</button>
+    <button class="primary" id="close-confirm" type="button">Close round</button>
+  </div>
+</dialog>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>
