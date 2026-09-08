@@ -8,10 +8,19 @@
  * notices `builtAt` change.
  */
 
+import { isAuthed } from "../lib/auth.mjs";
 import { buildCatalogue } from "../lib/catalogue.mjs";
 import { writeCatalogue } from "../lib/store.mjs";
 
-export default async function handler() {
+export default async function handler(request) {
+  // Netlify exposes this path directly, so it needs its own check: without one
+  // anybody could make the site fire fifty requests at the store on demand.
+  // /api/catalogue forwards the caller's cookie when it triggers this.
+  if (!isAuthed(request)) {
+    console.warn("catalogue: refresh rejected, not signed in");
+    return;
+  }
+
   const built = await buildCatalogue();
   await writeCatalogue(built);
   console.log(

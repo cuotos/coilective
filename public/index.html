@@ -229,6 +229,7 @@
     <span class="whoami" id="whoami" hidden>
       you're <strong id="whoami-name"></strong>
       <button class="quiet" id="change-name" type="button">change</button>
+      <button class="quiet" id="sign-out" type="button" title="Forget the password on this device">lock</button>
     </span>
   </header>
 
@@ -270,6 +271,22 @@
     person spent.
   </footer>
 </div>
+
+<!-- the shared password. Nothing behind it loads until this is right. -->
+<dialog id="lock-dialog">
+  <h3>Locked</h3>
+  <p class="add-note" style="margin-top:0">
+    One password for everyone. Ask whoever sent you the link.
+  </p>
+  <div class="row" style="margin-top:0.7rem">
+    <input class="grow" id="lock-input" type="password" placeholder="password"
+           autocomplete="current-password">
+  </div>
+  <div class="error" id="lock-error" hidden></div>
+  <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
+    <button class="primary" id="lock-save" type="button">Unlock</button>
+  </div>
+</dialog>
 
 <!-- who you are. Shown before anything else, and not dismissable until set:
      every item is filed under this name, so an empty one files nothing. -->

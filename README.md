@@ -15,15 +15,21 @@ npm run dev        # http://localhost:8888
 npm test
 ```
 
-Needs Node 22.13 or newer. `npm run dev` is `netlify dev`, which serves the
+Needs Node 22.13 or newer, and a `.env` holding the shared password:
+
+```
+COILECTIVE_PASSWORD=whatever you agreed
+```
+ `npm run dev` is `netlify dev`, which serves the
 static page, runs the functions, and emulates Netlify Blobs against
 `.netlify/` on disk.
 
 ## Deploying
 
 It is a static page plus Netlify Functions, so a Netlify site pointed at this
-repo needs no configuration beyond the defaults in `netlify.toml`. Persistence
-is Netlify Blobs, which requires no setup and no connection string.
+repo needs no configuration beyond the defaults in `netlify.toml`, plus
+`COILECTIVE_PASSWORD` set on the site. Persistence is Netlify Blobs, which
+requires no setup and no connection string.
 
 ## How it works
 
@@ -83,8 +89,27 @@ last saw and is refused if the round has moved on. Two people adding at the
 same moment get "someone else changed this, reload" instead of one addition
 silently vanishing.
 
+### Getting in
+
+One shared password, checked on the API rather than in the page. The browser
+never sees it: it is posted once, compared server-side against
+`COILECTIVE_PASSWORD`, and what comes back is an HttpOnly cookie holding a
+hash. Nothing in `public/` knows the password, and the static files are not
+worth protecting anyway — the rounds are, and they are all behind the guard.
+
+With `COILECTIVE_PASSWORD` unset the API refuses everything rather than
+falling open, so a forgotten variable locks the site instead of publishing it.
+
+Case and extra spaces are ignored when checking. The secret is the words; a
+passphrase that rejects "Printer Pals" from a phone keyboard only teaches
+people to paste it from a note.
+
 ### Identity
 
-Type your name once; it is kept in `localStorage`. There is no login, and
-nothing stops a determined friend editing your rows. That is honest rather than
-secure, which for a group of mates is the right trade.
+Once past the password, type your name — lowercase letters only, kept in
+`localStorage`. It is the identity money is split by, so it is normalised: "Dan"
+and "dan " being two people who each owe a share is a bug, not untidiness.
+
+Everyone shares the one password, so nothing stops a friend editing your rows.
+That is honest rather than secure, which for a group of mates is the right
+trade.

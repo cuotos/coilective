@@ -5,6 +5,8 @@
  * lines each sharing the same store, so one function with a small router is
  * less machinery than a file per endpoint.
  *
+ *   POST   /api/login                          { password } → a session cookie
+ *   POST   /api/logout                         forget it
  *   GET    /api/state                          everything the page needs
  *   POST   /api/lookup                         { url } or { id } → variants
  *   GET    /api/catalogue                      what the colour index knows
@@ -20,6 +22,7 @@
  *   DELETE /api/rounds/:id                     remove it entirely
  */
 
+import { assertAuthed, clearedCookie, login, NotConfigured, Unauthorized } from "../lib/auth.mjs";
 import { lookupProduct } from "../lib/bambu.mjs";
 import { findColour } from "../lib/catalogue.mjs";
 import { settleRound } from "../lib/money.mjs";
@@ -31,10 +34,10 @@ import {
 
 export const config = { path: "/api/*" };
 
-const json = (body, status = 200) =>
+const json = (body, status = 200, headers = {}) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json", "cache-control": "no-store" },
+    headers: { "content-type": "application/json", "cache-control": "no-store", ...headers },
   });
 
 /** A round plus the derived totals, so the page never does money maths. */
@@ -54,6 +57,21 @@ export default async function handler(request) {
   };
 
   try {
+    // POST /api/login   { password }
+    // Ahead of the guard, obviously — it is how you get past it.
+    if (method === "POST" && parts[0] === "login") {
+      const { password } = await body();
+      return json({ ok: true }, 200, { "set-cookie": login(request, password) });
+    }
+
+    if (method === "POST" && parts[0] === "logout") {
+      return json({ ok: true }, 200, { "set-cookie": clearedCookie(request) });
+    }
+
+    // Everything past here needs the password. One check, so a route added
+    // later cannot forget to make it.
+    assertAuthed(request);
+
     // GET /api/state
     if (method === "GET" && parts[0] === "state") {
       // Summaries are derived from the rounds, never cached in the index, so
@@ -113,7 +131,11 @@ export default async function handler(request) {
         const target = new URL("/.netlify/functions/catalogue-refresh-background", request.url);
         // Deliberately not awaited: the background function reports via its
         // own 202 and the page polls GET /api/catalogue for the result.
-        fetch(target, { method: "POST" }).catch((err) => console.error(err));
+        fetch(target, {
+          method: "POST",
+          // The background function checks the password too, so pass ours on.
+          headers: { cookie: request.headers.get("cookie") ?? "" },
+        }).catch((err) => console.error(err));
         return json({ started: true }, 202);
       }
     }
@@ -177,6 +199,9 @@ export default async function handler(request) {
     return json({ error: `No route for ${method} ${pathname}` }, 404);
   } catch (err) {
     // Every thrown message here is written to be shown to a person.
+    if (err instanceof Unauthorized) return json({ error: err.message }, 401);
+    // 503 rather than 401: the password is missing from the site, not wrong.
+    if (err instanceof NotConfigured) return json({ error: err.message }, 503);
     if (err instanceof BadRequest) return json({ error: err.message }, 400);
     if (err instanceof NotFound) return json({ error: err.message }, 404);
     if (err instanceof Conflict) return json({ error: err.message }, 409);

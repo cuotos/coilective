@@ -92,6 +92,9 @@ function showError(message) {
   box.hidden = !message;
 }
 
+/** Thrown when the API wants the password — 401, or 503 if none is configured. */
+class Locked extends Error {}
+
 async function api(path, options = {}) {
   showError("");
   const response = await fetch(`/api${path}`, {
@@ -99,8 +102,48 @@ async function api(path, options = {}) {
     headers: options.body ? { "content-type": "application/json" } : undefined,
   });
   const payload = await response.json().catch(() => ({}));
+  if (response.status === 401 || response.status === 503) {
+    throw new Locked(payload.error || "Sign in first.");
+  }
   if (!response.ok) throw new Error(payload.error || `Request failed (${response.status})`);
   return payload;
+}
+
+// --- the password ---------------------------------------------------------
+
+/**
+ * Ask for the shared password.
+ *
+ * The cookie the server sets lasts a year, so this is a once-per-device thing
+ * in practice. It reappears if the session is cleared or the password changes,
+ * from wherever in the app that happened.
+ */
+function askPassword(message = "") {
+  $("lock-error").textContent = message;
+  $("lock-error").hidden = !message;
+  if (!$("lock-dialog").open) $("lock-dialog").showModal();
+  $("lock-input").focus();
+  $("lock-input").select();
+}
+
+async function unlock() {
+  const password = $("lock-input").value;
+  if (!password) return askPassword("Type the password.");
+
+  $("lock-save").disabled = true;
+  try {
+    await api("/login", { method: "POST", body: JSON.stringify({ password }) });
+  } catch (err) {
+    return askPassword(err.message);
+  } finally {
+    $("lock-save").disabled = false;
+  }
+
+  $("lock-input").value = "";
+  $("lock-dialog").close();
+  askName(); // only now — no point asking who you are through a locked door
+  await refresh();
+  showCatalogueState();
 }
 
 const money = (pence, currency = "GBP") => {
@@ -279,6 +322,9 @@ async function guard(work) {
   try {
     await work();
   } catch (err) {
+    // Every request goes through here, so any expired session anywhere in the
+    // app lands back at the password rather than showing a dead-end error.
+    if (err instanceof Locked) return askPassword(err.message);
     showError(err.message);
   }
 }
@@ -477,6 +523,14 @@ $("close-cancel").addEventListener("click", () => $("close-dialog").close());
 $("close-confirm").addEventListener("click", confirmClose);
 $("reopen-round").addEventListener("click", doReopen);
 $("change-name").addEventListener("click", () => askName({ force: true }));
+$("sign-out").addEventListener("click", () => guard(async () => {
+  await api("/logout", { method: "POST" });
+  askPassword();
+}));
+$("lock-save").addEventListener("click", unlock);
+$("lock-input").addEventListener("keydown", (e) => e.key === "Enter" && unlock());
+// No escape from this one: there is nothing to show without it.
+$("lock-dialog").addEventListener("cancel", (event) => event.preventDefault());
 $("name-save").addEventListener("click", saveName);
 $("name-cancel").addEventListener("click", () => $("name-dialog").close());
 $("name-input").addEventListener("keydown", (e) => e.key === "Enter" && saveName());
@@ -498,7 +552,12 @@ $("discount-kind").addEventListener("change", (event) => {
   if (none) $("discount-value").value = "";
 });
 
+// The password gates the lot. `guard` turns the 401 from this first call into
+// the lock dialog, and unlocking picks up from there.
 renderWhoami();
-askName(); // before anything else: everything is filed under it
-refresh();
-showCatalogueState();
+guard(async () => {
+  state = await api("/state");
+  askName(); // before anything else: everything is filed under it
+  render();
+  showCatalogueState();
+});
