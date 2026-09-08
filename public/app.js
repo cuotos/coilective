@@ -19,27 +19,63 @@ let pending = null; // the product a lookup returned, awaiting a variant choice
 
 const NAME_KEY = "coilective:name";
 
-function me() {
+/**
+ * Names are lowercase a-z and nothing else.
+ *
+ * The name *is* the identity a round splits money by, so "Dan", "dan " and
+ * "Dan_2" turning into three people who each owe a share is a real bug, not a
+ * tidiness concern. Normalising on the way in means it cannot happen.
+ */
+const normaliseName = (raw) => String(raw ?? "").toLowerCase().replace(/[^a-z]/g, "");
+
+// Held in memory as well as localStorage, so a private window still works for
+// the session rather than asking again on every action.
+let myName = (() => {
   try {
-    return localStorage.getItem(NAME_KEY) || "";
+    return normaliseName(localStorage.getItem(NAME_KEY));
   } catch {
-    return ""; // private window; they will be asked each load
+    return "";
   }
-}
+})();
+
+const me = () => myName;
 
 function setMe(name) {
+  myName = name;
   try {
     localStorage.setItem(NAME_KEY, name);
-  } catch { /* not fatal — it just won't be remembered */ }
+  } catch { /* not fatal — it just won't be remembered next load */ }
   renderWhoami();
 }
 
-function askName(force = false) {
-  if (me() && !force) return me();
-  const answer = prompt("What's your name? (so people know whose spools are whose)", me());
-  const trimmed = (answer ?? "").trim();
-  if (trimmed) setMe(trimmed);
-  return me();
+/**
+ * Ask who they are, and refuse to be dismissed until they say.
+ *
+ * Nothing here works without a name — every item is filed under it — so with
+ * none set the dialog opens on load with no cancel and Escape disabled. Once
+ * there is one, the same dialog edits it and can be backed out of.
+ */
+function askName({ force = false } = {}) {
+  if (me() && !force) return;
+  const input = $("name-input");
+  input.value = me();
+  $("name-cancel").hidden = !me();
+  $("name-error").hidden = true;
+  if (!$("name-dialog").open) $("name-dialog").showModal();
+  input.focus();
+  input.select();
+}
+
+function saveName() {
+  const name = normaliseName($("name-input").value);
+  if (!name) {
+    $("name-error").textContent = "Lowercase letters only, and at least one of them.";
+    $("name-error").hidden = false;
+    return;
+  }
+  setMe(name);
+  $("name-dialog").close();
+  render();
 }
 
 function renderWhoami() {
@@ -265,7 +301,7 @@ const startRound = () => guard(async () => {
 const doLookup = () => guard(async () => {
   const entry = $("url").value.trim();
   if (!entry) return showError("Paste a product link, or type a colour code.");
-  if (!askName()) return showError("I need your name before adding anything.");
+  if (!me()) return askName();
 
   // Five digits is a colour code off the spool; anything else is a link.
   const payload = /^\d{5}$/.test(entry) ? { id: entry } : { url: entry };
@@ -440,7 +476,19 @@ $("close-round").addEventListener("click", () => $("close-dialog").showModal());
 $("close-cancel").addEventListener("click", () => $("close-dialog").close());
 $("close-confirm").addEventListener("click", confirmClose);
 $("reopen-round").addEventListener("click", doReopen);
-$("change-name").addEventListener("click", () => { askName(true); render(); });
+$("change-name").addEventListener("click", () => askName({ force: true }));
+$("name-save").addEventListener("click", saveName);
+$("name-cancel").addEventListener("click", () => $("name-dialog").close());
+$("name-input").addEventListener("keydown", (e) => e.key === "Enter" && saveName());
+// Show them what will actually be stored as they type, rather than quietly
+// rewriting "Dan" to "dan" after they commit.
+$("name-input").addEventListener("input", (event) => {
+  event.target.value = normaliseName(event.target.value);
+});
+// Escape and backdrop dismissal are only allowed once there is a name to keep.
+$("name-dialog").addEventListener("cancel", (event) => {
+  if (!me()) event.preventDefault();
+});
 $("home").addEventListener("click", () => refresh());
 
 $("discount-kind").addEventListener("change", (event) => {
@@ -451,5 +499,6 @@ $("discount-kind").addEventListener("change", (event) => {
 });
 
 renderWhoami();
+askName(); // before anything else: everything is filed under it
 refresh();
 showCatalogueState();

@@ -20,7 +20,16 @@ const STORE = "coilective";
 const INDEX_KEY = "index";
 const CATALOGUE_KEY = "catalogue";
 
-const store = () => getStore(STORE);
+/**
+ * Reads are strongly consistent, deliberately.
+ *
+ * Blobs defaults to eventual consistency — a write takes up to 60s to reach
+ * every edge. Every mutation here is a read-modify-write, so a stale read
+ * silently drops whatever it could not see: two items added a second apart
+ * lost the first. Strong reads are slower, which at a few requests per order
+ * costs nothing worth measuring.
+ */
+const store = () => getStore({ name: STORE, consistency: "strong" });
 
 function newId() {
   const now = new Date();

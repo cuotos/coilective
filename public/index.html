@@ -271,6 +271,25 @@
   </footer>
 </div>
 
+<!-- who you are. Shown before anything else, and not dismissable until set:
+     every item is filed under this name, so an empty one files nothing. -->
+<dialog id="name-dialog">
+  <h3>Who are you?</h3>
+  <p class="add-note" style="margin-top:0">
+    So people know whose spools are whose. Lowercase letters only, and spell it
+    the same way every round or you will owe money as two different people.
+  </p>
+  <div class="row" style="margin-top:0.7rem">
+    <input class="grow" id="name-input" placeholder="e.g. dan"
+           autocomplete="off" spellcheck="false" maxlength="20">
+  </div>
+  <div class="error" id="name-error" hidden></div>
+  <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
+    <button id="name-cancel" type="button" hidden>Cancel</button>
+    <button class="primary" id="name-save" type="button">That's me</button>
+  </div>
+</dialog>
+
 <!-- pick a variant after a lookup -->
 <dialog id="variant-dialog">
   <h3 id="variant-title">Pick one</h3>
