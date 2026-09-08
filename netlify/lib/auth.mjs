@@ -77,8 +77,6 @@ const secureFor = (request) => (new URL(request.url).protocol === "https:" ? "; 
 const cookie = (request, value, maxAge) =>
   `${COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly${secureFor(request)}; SameSite=Lax`;
 
-export const clearedCookie = (request) => cookie(request, "", 0);
-
 /** Right password? Then the Set-Cookie header that remembers it. */
 export function login(request, password) {
   if (!sameToken(tokenFor(password), expectedToken())) {

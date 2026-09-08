@@ -82,6 +82,17 @@ an "in the sale" flag, defaulting to yes. A sale covering PLA but not PETG must
 not hand a PETG buyer someone else's discount, which splitting by total spend
 would do. Postage ignores the flag — a parcel does not care what is in it.
 
+### Themes
+
+Dark and light, following the system until you pick one. The choice is stamped
+on `<html>` by an inline script in the head rather than handled in CSS, so each
+palette is written out once — two copies of the light one would eventually
+disagree — and there is no flash of the wrong theme before the app loads.
+
+Every colour in the sheet is a token, so a theme is a palette swap. The green
+is the part that has to move: `#4ade80` on white is about 1.7:1, unreadable, so
+light gets a darkened one. Both palettes are checked against WCAG AA.
+
 ### Concurrent edits
 
 Blobs has no transactions, so every mutation carries the `revision` the caller

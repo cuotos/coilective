@@ -15,6 +15,31 @@ let state = { open: null, rounds: [] };
 let viewing = null; // a closed round being looked at, or null for the open one
 let pending = null; // the product a lookup returned, awaiting a variant choice
 
+// --- theme ----------------------------------------------------------------
+
+/**
+ * Dark or light. The inline script in the head has already stamped one on
+ * <html> before paint, so this only handles switching it afterwards.
+ */
+const THEME_KEY = "coilective:theme";
+
+const theme = () => (document.documentElement.dataset.theme === "light" ? "light" : "dark");
+
+function setTheme(next) {
+  document.documentElement.dataset.theme = next;
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch { /* not fatal — it just won't be remembered */ }
+  renderTheme();
+}
+
+// The button is labelled with the theme it switches to, not the current one.
+function renderTheme() {
+  const other = theme() === "dark" ? "light" : "dark";
+  $("theme-toggle").textContent = other;
+  $("theme-toggle").title = `Switch to the ${other} theme`;
+}
+
 // --- who am I -------------------------------------------------------------
 
 const NAME_KEY = "coilective:name";
@@ -523,10 +548,7 @@ $("close-cancel").addEventListener("click", () => $("close-dialog").close());
 $("close-confirm").addEventListener("click", confirmClose);
 $("reopen-round").addEventListener("click", doReopen);
 $("change-name").addEventListener("click", () => askName({ force: true }));
-$("sign-out").addEventListener("click", () => guard(async () => {
-  await api("/logout", { method: "POST" });
-  askPassword();
-}));
+$("theme-toggle").addEventListener("click", () => setTheme(theme() === "dark" ? "light" : "dark"));
 $("lock-save").addEventListener("click", unlock);
 $("lock-input").addEventListener("keydown", (e) => e.key === "Enter" && unlock());
 // No escape from this one: there is nothing to show without it.
@@ -554,6 +576,7 @@ $("discount-kind").addEventListener("change", (event) => {
 
 // The password gates the lot. `guard` turns the 401 from this first call into
 // the lock dialog, and unlocking picks up from there.
+renderTheme();
 renderWhoami();
 guard(async () => {
   state = await api("/state");

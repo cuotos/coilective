@@ -6,7 +6,6 @@
  * less machinery than a file per endpoint.
  *
  *   POST   /api/login                          { password } → a session cookie
- *   POST   /api/logout                         forget it
  *   GET    /api/state                          everything the page needs
  *   POST   /api/lookup                         { url } or { id } → variants
  *   GET    /api/catalogue                      what the colour index knows
@@ -22,7 +21,7 @@
  *   DELETE /api/rounds/:id                     remove it entirely
  */
 
-import { assertAuthed, clearedCookie, login, NotConfigured, Unauthorized } from "../lib/auth.mjs";
+import { assertAuthed, login, NotConfigured, Unauthorized } from "../lib/auth.mjs";
 import { lookupProduct } from "../lib/bambu.mjs";
 import { findColour } from "../lib/catalogue.mjs";
 import { settleRound } from "../lib/money.mjs";
@@ -62,10 +61,6 @@ export default async function handler(request) {
     if (method === "POST" && parts[0] === "login") {
       const { password } = await body();
       return json({ ok: true }, 200, { "set-cookie": login(request, password) });
-    }
-
-    if (method === "POST" && parts[0] === "logout") {
-      return json({ ok: true }, 200, { "set-cookie": clearedCookie(request) });
     }
 
     // Everything past here needs the password. One check, so a route added

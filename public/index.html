@@ -4,26 +4,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>coilective</title>
+<script>
+  /*
+   * Pick the theme before the first paint.
+   *
+   * A saved choice wins; otherwise follow the system. Doing this here rather
+   * than after app.js loads is what stops a dark flash on a light machine.
+   * Deliberately not a module: those are deferred, which is too late.
+   */
+  (function () {
+    var theme = "dark";
+    try {
+      theme = localStorage.getItem("coilective:theme")
+        || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+    } catch (err) { /* private window; the default stands */ }
+    document.documentElement.dataset.theme = theme;
+  })();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
+  /*
+   * Two palettes, one set of names. Every colour in the sheet below comes from
+   * a token, so a theme is a palette swap rather than a second stylesheet.
+   *
+   * The theme is stamped onto <html data-theme> by the inline script in the
+   * head, before first paint. Doing it there rather than leaning on
+   * prefers-color-scheme in CSS keeps each palette written out exactly once —
+   * two copies of the light one would eventually disagree.
+   */
   :root {
     color-scheme: dark;
     --bg:      #14161a;
     --panel:   #1c1f25;
     --raised:  #23272f;
     --line:    #2e333c;
+    --line-soft: #21252c;  /* dividers inside a panel, softer than its edge */
     --ink:     #eef1f5;
     --muted:   #9aa3b0;
-    --faint:   #6b7482;
+    --faint:   #7f8896;
     --accent:  #4ade80;   /* filament green */
     --accent-dim: #1d3a29;
+    --on-accent: #0b1f14; /* text sitting on --accent */
     --warn:    #fbbf24;
     --danger:  #f87171;
+    --error-bg:   #3a1d1d;
+    --error-line: #5b2a2a;
+    --error-ink:  #ffd9d9;
+    --backdrop: rgba(0, 0, 0, 0.6);
     --f-display: "Space Grotesk", system-ui, sans-serif;
     --f-body:    "IBM Plex Sans", system-ui, sans-serif;
     --f-mono:    "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  /*
+   * The green has to change, not just the greys: #4ade80 on white is about
+   * 1.7:1, which is unreadable. The light accent is darkened until it carries
+   * text, and --accent-dim flips from a dark wash to a pale one.
+   */
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg:      #f6f7f9;
+    --panel:   #ffffff;
+    --raised:  #eef0f4;
+    --line:    #d8dde5;
+    --line-soft: #e7eaf0;
+    --ink:     #171a1f;
+    --muted:   #565e6b;
+    --faint:   #6d7583;
+    --accent:  #0f7a43;
+    --accent-dim: #d9f0e3;
+    --on-accent: #ffffff;
+    --warn:    #8a5200;
+    --danger:  #b62828;
+    --error-bg:   #fdeaea;
+    --error-line: #f2c4c4;
+    --error-ink:  #7d1f1f;
+    --backdrop: rgba(23, 26, 31, 0.35);
   }
 
   * { box-sizing: border-box; }
@@ -58,6 +116,10 @@
     margin-left: auto; display: flex; align-items: center; gap: 0.5rem;
     font-size: 0.875rem; color: var(--muted);
   }
+
+  /* Also margin-left:auto, so it sits right whether or not .whoami is shown. */
+  .theme-toggle { margin-left: auto; font-size: 0.875rem; }
+  .whoami + .theme-toggle { margin-left: 0; }
   .whoami strong { color: var(--ink); }
 
   /* ---------- panels ---------- */
@@ -112,7 +174,7 @@
 
   button.primary {
     background: var(--accent); border-color: var(--accent);
-    color: #0b1f14; font-weight: 600;
+    color: var(--on-accent); font-weight: 600;
   }
   button.primary:hover:not(:disabled) { filter: brightness(1.08); }
 
@@ -141,7 +203,7 @@
   .person-head .owes { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 
   .item { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; }
-  .item + .item { border-top: 1px solid #21252c; }
+  .item + .item { border-top: 1px solid var(--line-soft); }
 
   .item .what { flex: 1 1 auto; min-width: 0; }
   .item .product { font-weight: 500; }
@@ -189,7 +251,7 @@
     letter-spacing: 0.08em; color: var(--faint); font-weight: 600;
     padding: 0 0.5rem 0.35rem 0; border-bottom: 1px solid var(--line);
   }
-  table.settle td { padding: 0.4rem 0.5rem 0.4rem 0; border-bottom: 1px solid #21252c; }
+  table.settle td { padding: 0.4rem 0.5rem 0.4rem 0; border-bottom: 1px solid var(--line-soft); }
   table.settle td.num, table.settle th.num {
     text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums;
   }
@@ -201,7 +263,7 @@
   .empty { color: var(--faint); padding: 0.6rem 0; }
 
   .error {
-    background: #3a1d1d; border: 1px solid #5b2a2a; color: #ffd9d9;
+    background: var(--error-bg); border: 1px solid var(--error-line); color: var(--error-ink);
     border-radius: 8px; padding: 0.6rem 0.75rem; margin-top: 0.75rem;
     font-size: 0.9rem;
   }
@@ -214,7 +276,7 @@
     background: var(--panel); color: var(--ink); border: 1px solid var(--line);
     border-radius: 12px; padding: 1.1rem 1.2rem; max-width: 34rem; width: calc(100% - 2rem);
   }
-  dialog::backdrop { background: rgba(0,0,0,0.6); }
+  dialog::backdrop { background: var(--backdrop); }
   dialog h3 { font-family: var(--f-display); margin: 0 0 0.7rem; font-size: 1.05rem; }
 
   footer { margin-top: 2.5rem; color: var(--faint); font-size: 0.82rem; }
@@ -229,8 +291,10 @@
     <span class="whoami" id="whoami" hidden>
       you're <strong id="whoami-name"></strong>
       <button class="quiet" id="change-name" type="button">change</button>
-      <button class="quiet" id="sign-out" type="button" title="Forget the password on this device">lock</button>
     </span>
+    <!-- Outside .whoami so it works at the password screen too, where there
+         is no name yet and .whoami is hidden. -->
+    <button class="quiet theme-toggle" id="theme-toggle" type="button"></button>
   </header>
 
   <div id="error" class="error" hidden></div>
