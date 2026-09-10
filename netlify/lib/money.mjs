@@ -156,11 +156,20 @@ export function settleRound(round) {
   const paidBy = round.paidBy ?? null;
   const settledBy = new Set(round.settledBy ?? []);
 
+  const tier = estimateDiscount(saleSpools);
+  // Priced here rather than in the page, like every other figure: the sale
+  // applies to the discountable spend, not the whole order.
+  const estimatedDiscount = discountPence({ kind: "percent", value: tier.percent }, discountable);
+
   return {
     paidBy,
     // What the sale would give this many spools. Only meaningful while the
     // round is open; once closed, the real discount is recorded.
-    estimate: estimateDiscount(saleSpools),
+    estimate: {
+      ...tier,
+      discountPence: estimatedDiscount,
+      totalPence: subtotal - estimatedDiscount,
+    },
     people: people.map((person, i) => ({
       person,
       // The payer is square by definition: they are the one out of pocket.

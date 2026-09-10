@@ -354,11 +354,25 @@ function renderTotals(round) {
   const s = round.settlement;
   if (round.items.length === 0) { $("totals").innerHTML = ""; return; }
 
+  const open = round.status === "open";
+
+  // An open round has no discount yet, so it shows the one the sale is
+  // expected to give — same shape as a closed round's figures, so the numbers
+  // sit where you already look for them.
   const discountLine = round.discount
     ? `<div><span class="label">Discount${round.discount.kind === "percent" ? ` (${round.discount.value}%)` : ""}</span><span class="value">−${money(s.discountPence)}</span></div>`
-    : "";
+    : open && s.estimate.discountPence
+      ? `<div><span class="label">Estimated discount (${s.estimate.percent}%)</span><span class="value">−${money(s.estimate.discountPence)}</span></div>`
+      : "";
+
   const shippingLine = s.shippingPence
     ? `<div><span class="label">Postage</span><span class="value">${money(s.shippingPence)}</span></div>`
+    : "";
+
+  // The list total stays, with the estimate under it, so the saving is the
+  // difference between two figures you can both see.
+  const estimatedTotalLine = open && s.estimate.discountPence
+    ? `<div class="grand estimated"><span class="label">Estimated total</span><span class="value">${money(s.estimate.totalPence)}</span></div>`
     : "";
 
   const settleTable = round.status === "closed"
@@ -386,6 +400,7 @@ function renderTotals(round) {
       <div><span class="label">Items</span><span class="value">${money(s.subtotalPence)}</span></div>
       ${discountLine}${shippingLine}
       <div class="grand"><span class="label">Total</span><span class="value">${money(s.totalPence)}</span></div>
+      ${estimatedTotalLine}
     </div>
     ${renderEstimate(round)}
     ${settleTable}`;
