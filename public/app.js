@@ -243,6 +243,21 @@ function render() {
   renderHistory();
 }
 
+/**
+ * Marks an item that the round's discount does not apply to.
+ *
+ * Almost everything is in the sale, so saying so on every line is noise that
+ * makes the exceptions harder to spot rather than easier. Only the exceptions
+ * are labelled. On an open round the label is the way back in; items are put
+ * *out* of the sale when they are added, in the variant picker.
+ */
+function saleNote(item, editable) {
+  if (item.discounted !== false) return "";
+  if (!editable) return `<span class="no-sale-note">not in the sale</span>`;
+  return `<button class="quiet no-sale-note" data-sale="${item.id}"
+    title="Put this back in the sale">not in the sale</button>`;
+}
+
 function renderItems(round) {
   const box = $("items");
   if (round.items.length === 0) {
@@ -273,11 +288,7 @@ function renderItems(round) {
               : esc(item.productName)}</div>
             ${item.variant ? `<div class="variant">${esc(item.variant)}</div>` : ""}
           </div>
-          ${editable
-            ? `<label class="sale-toggle ${item.discounted === false ? "" : "on"}">
-                 <input type="checkbox" data-sale="${item.id}" ${item.discounted === false ? "" : "checked"}>
-                 sale</label>`
-            : item.discounted === false ? `<span class="no-sale-note">not in sale</span>` : ""}
+          ${saleNote(item, editable)}
           ${editable
             ? `<input class="qty" type="number" min="1" max="99" value="${item.qty}" data-qty="${item.id}">`
             : `<span class="variant">×${item.qty}</span>`}
@@ -294,8 +305,10 @@ function renderItems(round) {
     box.querySelectorAll("[data-remove]").forEach((button) => {
       button.addEventListener("click", () => removeItem(button.dataset.remove));
     });
-    box.querySelectorAll("[data-sale]").forEach((input) => {
-      input.addEventListener("change", () => setSale(input.dataset.sale, input.checked));
+    box.querySelectorAll("[data-sale]").forEach((button) => {
+      // The only direction available here: the marker exists because the item
+      // is out of the sale, so clicking it can only put it back in.
+      button.addEventListener("click", () => setSale(button.dataset.sale, true));
     });
   }
 }

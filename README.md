@@ -127,7 +127,9 @@ Naive rounding hands out £9.99 of a £10 discount and leaves someone arguing
 over a penny.
 
 The discount splits only across the items it **applies to**. Each item carries
-an "in the sale" flag, defaulting to yes. A sale covering PLA but not PETG must
+an "in the sale" flag, defaulting to yes, and set when the item is added.
+Only the exceptions are labelled in the list: almost everything is in the sale,
+so saying so on every line is noise that makes the exceptions harder to spot. A sale covering PLA but not PETG must
 not hand a PETG buyer someone else's discount, which splitting by total spend
 would do. Postage ignores the flag — a parcel does not care what is in it.
 
