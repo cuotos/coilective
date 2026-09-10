@@ -286,14 +286,51 @@ export async function removeItem(id, revision, itemId) {
   });
 }
 
-export async function setQty(id, revision, itemId, qty) {
-  const n = Number(qty);
-  if (!Number.isInteger(n) || n < 1 || n > 99) throw new BadRequest("Quantity must be 1–99.");
+/**
+ * Changes one item: quantity, unit price, whether the discount applies.
+ *
+ * One function rather than three, so a form that edits two of them at once is
+ * a single revision. Two calls would have the second refused as a conflict
+ * with the first.
+ *
+ * The price is editable because the store is not always right about what an
+ * order cost — a line-level deal, a price that moved between wishlisting and
+ * ordering, or an item the store has no page for at all.
+ */
+export async function updateItem(id, revision, itemId, patch) {
+  const changes = {};
+
+  if (patch.qty !== undefined) {
+    const n = Number(patch.qty);
+    if (!Number.isInteger(n) || n < 1 || n > 99) throw new BadRequest("Quantity must be 1–99.");
+    changes.qty = n;
+  }
+
+  if (patch.unitPrice !== undefined || patch.unitPricePence !== undefined) {
+    let pence;
+    try {
+      pence = patch.unitPricePence !== undefined
+        ? Math.round(Number(patch.unitPricePence))
+        : toPence(patch.unitPrice);
+    } catch {
+      throw new BadRequest("That price doesn't look like a number.");
+    }
+    if (!Number.isFinite(pence) || pence < 0) throw new BadRequest("A price can't be negative.");
+    changes.unitPricePence = pence;
+  }
+
+  if (patch.discounted !== undefined) changes.discounted = patch.discounted !== false;
+
+  if (Object.keys(changes).length === 0) throw new BadRequest("Nothing to change.");
+
   return mutate(id, revision, (round) => {
     if (round.status !== "open") throw new BadRequest("That round is closed.");
     const item = round.items.find((i) => i.id === itemId);
     if (!item) throw new NotFound("That item is gone.");
-    item.qty = n;
+    Object.assign(item, changes);
+    // A hand-typed price is no longer the store's, so stop claiming it was
+    // checked against the store at a point in time.
+    if (changes.unitPricePence !== undefined) item.priceCheckedAt = null;
     return round;
   });
 }
@@ -376,17 +413,6 @@ export async function reopenRound(id, revision) {
     r.status = "open";
     r.closedAt = null;
     return r;
-  });
-}
-
-/** Marks an item in or out of the round's discount. */
-export async function setDiscounted(id, revision, itemId, discounted) {
-  return mutate(id, revision, (round) => {
-    if (round.status !== "open") throw new BadRequest("That round is closed.");
-    const item = round.items.find((i) => i.id === itemId);
-    if (!item) throw new NotFound("That item is gone.");
-    item.discounted = discounted !== false;
-    return round;
   });
 }
 

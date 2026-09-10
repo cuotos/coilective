@@ -89,6 +89,13 @@ npm run catalogue -- http://localhost:8888
 The price captured is the one showing when the item was added. That is what
 the order actually cost, so it is not re-fetched later.
 
+It is also editable. Click an item's name on an open round to change what it
+cost, or whether the discount reaches it — the store's price is a starting
+point, not the truth. A line-level deal, a price that moved between
+wishlisting and ordering, and a printer part with no filament page at all are
+all ordinary. A hand-typed price clears `priceCheckedAt`, since it is no
+longer a figure the store gave.
+
 ### Prices are the UK ones, or there is no price
 
 Bambu run a storefront per region and Cloudflare redirects you to the one

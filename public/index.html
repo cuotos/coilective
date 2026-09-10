@@ -232,6 +232,15 @@
   .sale-toggle.on { color: var(--accent); }
 
   .no-sale-note { color: var(--warn); font-size: 0.8rem; white-space: nowrap; }
+
+  /* The product name is the way into editing the line, so it has to look
+     like something you can press without shouting about it. */
+  .product-edit {
+    font: inherit; color: var(--ink); text-align: left;
+    background: none; border: none; padding: 0; cursor: pointer;
+    border-bottom: 1px dashed transparent;
+  }
+  .product-edit:hover { color: var(--accent); border-bottom-color: var(--accent); }
   button.no-sale-note { padding: 0.15rem 0.35rem; border-color: transparent; background: none; }
   button.no-sale-note:hover { color: var(--accent); background: var(--raised); }
 
@@ -410,6 +419,26 @@
   <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
     <button id="name-cancel" type="button" hidden>Cancel</button>
     <button class="primary" id="name-save" type="button">That's me</button>
+  </div>
+</dialog>
+
+<!-- edit one line: the price the store gave is not always what it cost -->
+<dialog id="item-dialog">
+  <h3 id="item-title">Item</h3>
+  <p class="add-note" style="margin-top:0" id="item-variant"></p>
+  <div class="row" style="margin-top:0.8rem">
+    <label for="item-price" style="color:var(--muted)">Each</label>
+    <input id="item-price" type="text" inputmode="decimal" style="width:7rem">
+    <span class="add-note" id="item-price-note" style="margin:0"></span>
+  </div>
+  <label class="sale-toggle" id="item-sale-label" style="margin-top:0.7rem">
+    <input type="checkbox" id="item-sale">
+    in the sale
+  </label>
+  <p class="add-note" id="item-link"></p>
+  <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
+    <button id="item-cancel" type="button">Cancel</button>
+    <button class="primary" id="item-save" type="button">Save</button>
   </div>
 </dialog>
 

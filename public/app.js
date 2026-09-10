@@ -283,9 +283,12 @@ function renderItems(round) {
       ${items.map((item) => `
         <div class="item ${item.discounted === false ? "excluded" : ""}" data-item="${item.id}">
           <div class="what">
-            <div class="product">${item.url
-              ? `<a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.productName)}</a>`
-              : esc(item.productName)}</div>
+            <div class="product">${editable
+              ? `<button class="product-edit" data-edit="${item.id}"
+                   title="Change the price, or whether the discount applies">${esc(item.productName)}</button>`
+              : item.url
+                ? `<a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.productName)}</a>`
+                : esc(item.productName)}</div>
             ${item.variant ? `<div class="variant">${esc(item.variant)}</div>` : ""}
           </div>
           ${saleNote(item, editable)}
@@ -304,6 +307,9 @@ function renderItems(round) {
     });
     box.querySelectorAll("[data-remove]").forEach((button) => {
       button.addEventListener("click", () => removeItem(button.dataset.remove));
+    });
+    box.querySelectorAll("[data-edit]").forEach((button) => {
+      button.addEventListener("click", () => openItemEditor(button.dataset.edit));
     });
     box.querySelectorAll("[data-sale]").forEach((button) => {
       // The only direction available here: the marker exists because the item
@@ -598,6 +604,53 @@ const addPending = () => guard(async () => {
   render();
 });
 
+/**
+ * Edit one line: what it cost, and whether the discount applies to it.
+ *
+ * The store's price is a starting point, not the truth — a line-level deal, a
+ * price that moved between wishlisting and ordering, or something the store
+ * has no page for at all. The original stays on screen while you type so it
+ * is clear what is being overridden.
+ */
+let editing = null;
+
+function openItemEditor(itemId) {
+  const round = shown();
+  const item = round.items.find((i) => i.id === itemId);
+  if (!item) return;
+  editing = item.id;
+
+  $("item-title").textContent = item.productName;
+  $("item-variant").textContent = item.variant ?? "";
+  $("item-price").value = (item.unitPricePence / 100).toFixed(2);
+  $("item-price-note").textContent = item.qty > 1 ? `each, ×${item.qty}` : "each";
+  $("item-sale").checked = item.discounted !== false;
+  $("item-sale-label").classList.toggle("on", item.discounted !== false);
+  $("item-link").innerHTML = item.url
+    ? `<a href="${esc(item.url)}" target="_blank" rel="noopener">see it on the store</a>`
+    : "";
+
+  $("item-dialog").showModal();
+  $("item-price").focus();
+  $("item-price").select();
+}
+
+const saveItem = () => guard(async () => {
+  const round = shown();
+  const updated = await api(`/rounds/${round.id}/items/${editing}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      revision: round.revision,
+      unitPrice: $("item-price").value.trim(),
+      discounted: $("item-sale").checked,
+    }),
+  });
+  $("item-dialog").close();
+  editing = null;
+  if (viewing) viewing = updated; else state.open = updated;
+  render();
+});
+
 const setSale = (itemId, discounted) => guard(async () => {
   state.open = await api(`/rounds/${state.open.id}/items/${itemId}`, {
     method: "PATCH",
@@ -686,6 +739,12 @@ $("reopen-round").addEventListener("click", doReopen);
 $("change-name").addEventListener("click", () => askName({ force: true }));
 $("rename-round").addEventListener("click", renameRound);
 $("redate-round").addEventListener("click", redateRound);
+$("item-save").addEventListener("click", saveItem);
+$("item-cancel").addEventListener("click", () => { editing = null; $("item-dialog").close(); });
+$("item-price").addEventListener("keydown", (e) => e.key === "Enter" && saveItem());
+$("item-sale").addEventListener("change", (event) => {
+  $("item-sale-label").classList.toggle("on", event.target.checked);
+});
 $("theme-toggle").addEventListener("click", () => setTheme(theme() === "dark" ? "light" : "dark"));
 $("lock-save").addEventListener("click", unlock);
 $("lock-input").addEventListener("keydown", (e) => e.key === "Enter" && unlock());

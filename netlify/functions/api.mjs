@@ -12,7 +12,7 @@
  *   PUT    /api/catalogue                      upload one built on a UK machine
  *   GET    /api/rounds/:id                     one round, settled
  *   POST   /api/rounds/:id/items               add an item
- *   PATCH  /api/rounds/:id/items/:itemId       { qty } or { discounted }
+ *   PATCH  /api/rounds/:id/items/:itemId       any of { qty, unitPrice, discounted }
  *   DELETE /api/rounds/:id/items/:itemId       remove
  *   POST   /api/rounds/:id/close               { discount, shippingPence, paidBy }
  *   POST   /api/rounds/:id/settled             { person, settled } → tick off a debt
@@ -26,8 +26,8 @@ import { lookupProduct } from "../lib/bambu.mjs";
 import { findColour } from "../lib/catalogue.mjs";
 import { settleRound } from "../lib/money.mjs";
 import {
-  ensureOpenRound, readRound, addItem, removeItem, setQty,
-  closeRound, reopenRound, renameRound, deleteRound, setDiscounted,
+  ensureOpenRound, readRound, addItem, removeItem, updateItem,
+  closeRound, reopenRound, renameRound, deleteRound,
   setPaidBy, setSettled, setClosedAt,
   readCatalogue, writeCatalogue, NotFound, Conflict, BadRequest,
 } from "../lib/store.mjs";
@@ -169,10 +169,10 @@ export default async function handler(request) {
           return json(withTotals(await addItem(id, revision, payload)), 201);
         }
         if (method === "PATCH" && itemId) {
-          if (payload.discounted !== undefined) {
-            return json(withTotals(await setDiscounted(id, revision, itemId, payload.discounted)));
-          }
-          return json(withTotals(await setQty(id, revision, itemId, payload.qty)));
+          const { qty, unitPrice, unitPricePence, discounted } = payload;
+          return json(withTotals(
+            await updateItem(id, revision, itemId, { qty, unitPrice, unitPricePence, discounted }),
+          ));
         }
         if (method === "DELETE" && itemId) {
           return json(withTotals(await removeItem(id, revision, itemId)));
