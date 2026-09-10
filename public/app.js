@@ -319,6 +319,37 @@ function renderItems(round) {
   }
 }
 
+const spools = (n) => `${n} spool${n === 1 ? "" : "s"}`;
+
+/**
+ * What the sale would give the wishlist as it stands, and what a few more
+ * spools would be worth.
+ *
+ * The point of pooling an order is the next tier, so the number worth showing
+ * is the gap to it — not the discount already earned.
+ */
+function renderEstimate(round) {
+  if (round.status !== "open") return "";
+  const e = round.settlement.estimate;
+
+  const earned = e.percent
+    ? `about <strong>${e.percent}% off</strong>${e.freePostage ? " and free postage" : ""}`
+    : e.freePostage
+      ? "<strong>free postage</strong>"
+      : "no discount yet";
+
+  const next = !e.next
+    ? "That is the best tier."
+    : e.next.freePostage
+      ? `${spools(e.next.more)} more earns free postage.`
+      : `${spools(e.next.more)} more and it is about ${e.next.percent}% off.`;
+
+  return `<p class="estimate">
+    ${spools(e.spools)} in the sale — ${earned}. ${next}
+    <span class="estimate-caveat">Bambu's tiers are not published, so this is a guess from past orders.</span>
+  </p>`;
+}
+
 function renderTotals(round) {
   const s = round.settlement;
   if (round.items.length === 0) { $("totals").innerHTML = ""; return; }
@@ -356,6 +387,7 @@ function renderTotals(round) {
       ${discountLine}${shippingLine}
       <div class="grand"><span class="label">Total</span><span class="value">${money(s.totalPence)}</span></div>
     </div>
+    ${renderEstimate(round)}
     ${settleTable}`;
 
   for (const box of $("totals").querySelectorAll("[data-settled]")) {
@@ -727,8 +759,21 @@ $("variant-sale").addEventListener("change", (event) => {
 });
 $("variant-cancel").addEventListener("click", () => { pending = null; $("variant-dialog").close(); });
 $("close-round").addEventListener("click", () => {
+  const round = shown();
+
+  // Open on the estimate rather than blank: it is usually what happened, and
+  // a wrong number in front of you gets corrected where an empty box gets
+  // guessed at.
+  const e = round?.settlement?.estimate;
+  if (e?.percent) {
+    $("discount-kind").value = "percent";
+    $("discount-value").disabled = false;
+    $("discount-value").value = String(e.percent);
+  }
+  if (e?.freePostage) $("shipping").value = "0.00";
+
   // Only people with something in the round can have paid for it.
-  const people = [...new Set((shown()?.items ?? []).map((i) => i.person))].sort();
+  const people = [...new Set((round?.items ?? []).map((i) => i.person))].sort();
   $("paid-by").innerHTML = `<option value="">decide later</option>`
     + people.map((p) => `<option value="${esc(p)}" ${p === me() ? "selected" : ""}>${esc(p)}</option>`).join("");
   $("close-dialog").showModal();

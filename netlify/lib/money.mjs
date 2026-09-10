@@ -65,6 +65,49 @@ export function splitProportionally(totalPence, weights) {
   return shares;
 }
 
+/**
+ * What Bambu's bulk sale tends to give you, by spool count.
+ *
+ * An estimate, not a promise: these are the tiers we keep seeing rather than
+ * anything published, and they move. It exists so a wishlist can say "two
+ * more and everyone saves another 3%", which is the whole reason for pooling
+ * an order in the first place.
+ *
+ * Free postage arrives at three and stays.
+ */
+const TIERS = [
+  { spools: 3, percent: 0 },
+  { spools: 4, percent: 30 },
+  { spools: 6, percent: 40 },
+  { spools: 10, percent: 43 },
+];
+
+const FREE_POSTAGE_AT = 3;
+
+/**
+ * The tier a given number of spools reaches, and the next one up.
+ *
+ * Counts only spools the sale applies to — a print plate does not earn anyone
+ * a bulk discount.
+ */
+export function estimateDiscount(spools) {
+  const reached = TIERS.filter((t) => spools >= t.spools).at(-1) ?? null;
+  const next = TIERS.find((t) => spools < t.spools) ?? null;
+
+  return {
+    spools,
+    percent: reached?.percent ?? 0,
+    freePostage: spools >= FREE_POSTAGE_AT,
+    // What another few spools would be worth, so the wishlist can say so.
+    next: next && {
+      spools: next.spools,
+      more: next.spools - spools,
+      percent: next.percent,
+      freePostage: next.spools === FREE_POSTAGE_AT,
+    },
+  };
+}
+
 /** An item counts towards the discount unless it is explicitly marked out. */
 const inSale = (item) => item.discounted !== false;
 
@@ -106,11 +149,18 @@ export function settleRound(round) {
   const shippingShares = splitProportionally(shipping, subtotals);
   const owed = people.map((_, i) => subtotals[i] - discountShares[i] + shippingShares[i]);
 
+  const saleSpools = items
+    .filter(inSale)
+    .reduce((n, item) => n + item.qty, 0);
+
   const paidBy = round.paidBy ?? null;
   const settledBy = new Set(round.settledBy ?? []);
 
   return {
     paidBy,
+    // What the sale would give this many spools. Only meaningful while the
+    // round is open; once closed, the real discount is recorded.
+    estimate: estimateDiscount(saleSpools),
     people: people.map((person, i) => ({
       person,
       // The payer is square by definition: they are the one out of pocket.

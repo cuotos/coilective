@@ -166,6 +166,22 @@ a typo invents a person nobody owes, and knowing who to pay is the whole
 point. Changing the payer clears the ticks: debts are owed *to* someone, so a
 different someone makes the old ticks meaningless rather than merely stale.
 
+### What another spool is worth
+
+The open round estimates what the bulk sale would give it: roughly free
+postage at three spools, 30% at four, 40% at six, 43% at ten. The number
+worth showing is the *gap* to the next tier, since that is the entire reason
+for pooling an order — "two more and it is about 40% off" is what makes
+somebody add the spool they were putting off.
+
+It counts spools rather than lines, and ignores anything the sale does not
+apply to: a print plate earns nobody a bulk discount.
+
+These tiers are not published anywhere. They are what past orders came to, so
+the figure is labelled a guess and the close dialog opens on it rather than
+applying it — a wrong number in front of you gets corrected, where an empty
+box gets guessed at.
+
 ### Concurrent edits
 
 Blobs has no transactions, so every mutation carries the `revision` the caller

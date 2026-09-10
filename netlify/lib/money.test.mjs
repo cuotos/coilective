@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toPence, formatMoney, splitProportionally, settleRound, discountPence } from "./money.mjs";
+import { toPence, formatMoney, splitProportionally, settleRound, discountPence, estimateDiscount } from "./money.mjs";
 
 test("parses the price strings Bambu actually returns", () => {
   assert.equal(toPence("17.99"), 1799);
@@ -154,4 +154,41 @@ test("with no payer named there is nothing outstanding to report", () => {
   const s = settleRound({ items: [{ person: "dan", unitPricePence: 1000, qty: 1 }] });
   assert.equal(s.paidBy, null);
   assert.equal(s.outstandingPence, null);
+});
+
+test("the sale tiers land on the right discount", () => {
+  assert.equal(estimateDiscount(0).percent, 0);
+  assert.equal(estimateDiscount(3).percent, 0);   // free postage, no money off
+  assert.equal(estimateDiscount(4).percent, 30);
+  assert.equal(estimateDiscount(5).percent, 30);  // between tiers, keeps the lower
+  assert.equal(estimateDiscount(6).percent, 40);
+  assert.equal(estimateDiscount(10).percent, 43);
+  assert.equal(estimateDiscount(40).percent, 43); // no tier above the top one
+});
+
+test("free postage arrives at three spools and stays", () => {
+  assert.equal(estimateDiscount(2).freePostage, false);
+  assert.equal(estimateDiscount(3).freePostage, true);
+  assert.equal(estimateDiscount(20).freePostage, true);
+});
+
+test("the next tier says how many more spools it wants", () => {
+  assert.deepEqual(estimateDiscount(1).next, { spools: 3, more: 2, percent: 0, freePostage: true });
+  assert.deepEqual(estimateDiscount(4).next, { spools: 6, more: 2, percent: 40, freePostage: false });
+  assert.deepEqual(estimateDiscount(9).next, { spools: 10, more: 1, percent: 43, freePostage: false });
+  // Nothing to reach for at the top.
+  assert.equal(estimateDiscount(10).next, null);
+});
+
+test("the estimate counts spools, not lines, and ignores what the sale misses", () => {
+  const s = settleRound({
+    items: [
+      { person: "dan", unitPricePence: 1799, qty: 4 },
+      { person: "matt", unitPricePence: 1799, qty: 2 },
+      // A print plate earns nobody a bulk discount.
+      { person: "dan", unitPricePence: 2099, qty: 1, discounted: false },
+    ],
+  });
+  assert.equal(s.estimate.spools, 6);
+  assert.equal(s.estimate.percent, 40);
 });
