@@ -137,6 +137,21 @@ Every colour in the sheet is a token, so a theme is a palette swap. The green
 is the part that has to move: `#4ade80` on white is about 1.7:1, unreadable, so
 light gets a darkened one. Both palettes are checked against WCAG AA.
 
+### Who owes whom
+
+One person pays the store, so the round records who that was — at close, or
+afterwards, since the order often goes in before anyone works out whose card
+is on it. Their own share is already spent and never shows as a debt.
+
+Everyone else gets a tick box. The payer sees what they are still owed, which
+goes to "everyone has settled up" rather than £0.00, because £0.00 is also
+what you see before anyone has paid anything.
+
+Only someone with items in the round can be the payer. Free text there means
+a typo invents a person nobody owes, and knowing who to pay is the whole
+point. Changing the payer clears the ticks: debts are owed *to* someone, so a
+different someone makes the old ticks meaningless rather than merely stale.
+
 ### Concurrent edits
 
 Blobs has no transactions, so every mutation carries the `revision` the caller

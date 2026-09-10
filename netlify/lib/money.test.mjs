@@ -111,3 +111,47 @@ test("an empty round settles to zero rather than throwing", () => {
   assert.deepEqual(s.people, []);
   assert.equal(s.totalPence, 0);
 });
+
+test("the payer owes nobody, and everyone else owes them", () => {
+  const round = {
+    paidBy: "dan",
+    items: [
+      { person: "dan", unitPricePence: 6000, qty: 1 },
+      { person: "matt", unitPricePence: 3000, qty: 1 },
+      { person: "sam", unitPricePence: 1000, qty: 1 },
+    ],
+  };
+  const s = settleRound(round);
+  const of = (name) => s.people.find((p) => p.person === name);
+
+  assert.equal(s.paidBy, "dan");
+  assert.equal(of("dan").isPayer, true);
+  // Already out of pocket, so square by definition — not a debt to collect.
+  assert.equal(of("dan").settled, true);
+  assert.equal(of("matt").settled, false);
+
+  // Everyone but the payer, until they tick off.
+  assert.equal(s.outstandingPence, 4000);
+});
+
+test("settling up reduces what the payer is still owed", () => {
+  const items = [
+    { person: "dan", unitPricePence: 6000, qty: 1 },
+    { person: "matt", unitPricePence: 3000, qty: 1 },
+    { person: "sam", unitPricePence: 1000, qty: 1 },
+  ];
+  const settled = settleRound({ paidBy: "dan", settledBy: ["matt"], items });
+
+  assert.equal(settled.people.find((p) => p.person === "matt").settled, true);
+  assert.equal(settled.outstandingPence, 1000);
+
+  const all = settleRound({ paidBy: "dan", settledBy: ["matt", "sam"], items });
+  assert.equal(all.outstandingPence, 0);
+});
+
+test("with no payer named there is nothing outstanding to report", () => {
+  // Not zero — zero would read as "everyone has paid up".
+  const s = settleRound({ items: [{ person: "dan", unitPricePence: 1000, qty: 1 }] });
+  assert.equal(s.paidBy, null);
+  assert.equal(s.outstandingPence, null);
+});

@@ -311,16 +311,19 @@ function renderTotals(round) {
         <thead><tr>
           <th>Who</th><th class="num">Spools</th><th class="num">Items</th>
           <th class="num">Discount</th><th class="num">Postage</th><th class="num">Owes</th>
+          <th></th>
         </tr></thead>
-        <tbody>${s.people.map((p) => `<tr>
-          <td>${esc(p.person)}</td>
+        <tbody>${s.people.map((p) => `<tr class="${p.isPayer ? "is-payer" : ""}">
+          <td>${esc(p.person)}${p.isPayer ? " (paid)" : ""}</td>
           <td class="num">${p.itemCount}</td>
           <td class="num">${money(p.subtotalPence)}</td>
           <td class="num">−${money(p.discountPence)}</td>
           <td class="num">${money(p.shippingPence)}</td>
           <td class="num owes">${money(p.owesPence)}</td>
+          <td class="paid-cell">${paidTick(s, p)}</td>
         </tr>`).join("")}</tbody>
-      </table>`
+      </table>
+      ${payerLine(round, s)}`
     : "";
 
   $("totals").innerHTML = `
@@ -330,7 +333,75 @@ function renderTotals(round) {
       <div class="grand"><span class="label">Total</span><span class="value">${money(s.totalPence)}</span></div>
     </div>
     ${settleTable}`;
+
+  for (const box of $("totals").querySelectorAll("[data-settled]")) {
+    box.addEventListener("change", () => setSettledUp(box.dataset.settled, box.checked));
+  }
+  const picker = $("totals").querySelector("[data-paid-by]");
+  if (picker) picker.addEventListener("change", () => choosePayer(picker.value));
 }
+
+/**
+ * The tick against one person's debt.
+ *
+ * Nothing to tick until somebody says who paid — until then there is no one
+ * for the money to go to — and the payer has no debt of their own.
+ */
+function paidTick(settlement, person) {
+  if (!settlement.paidBy || person.isPayer) return "";
+  return `<label class="paid-toggle ${person.settled ? "on" : ""}">
+    <input type="checkbox" data-settled="${esc(person.person)}" ${person.settled ? "checked" : ""}>
+    paid
+  </label>`;
+}
+
+/** Who fronted the money, and what they are still owed. */
+function payerLine(round, settlement) {
+  const people = settlement.people.map((p) => p.person);
+
+  if (!settlement.paidBy) {
+    return `<div class="payer">
+      <span>Who paid for this?</span>
+      <select data-paid-by>
+        <option value="">nobody yet</option>
+        ${people.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("")}
+      </select>
+    </div>`;
+  }
+
+  const outstanding = settlement.outstandingPence;
+  const status = outstanding === 0
+    ? `<span class="outstanding clear">everyone has settled up</span>`
+    : `<span class="outstanding">still owed ${money(outstanding)}</span>`;
+
+  return `<div class="payer">
+    <span><strong>${esc(settlement.paidBy)}</strong> paid the ${money(settlement.totalPence)}</span>
+    ${status}
+    <select data-paid-by>
+      ${people.map((p) => `<option value="${esc(p)}" ${p === settlement.paidBy ? "selected" : ""}>${esc(p)}</option>`).join("")}
+    </select>
+  </div>`;
+}
+
+const setSettledUp = (person, settled) => guard(async () => {
+  const round = shown();
+  const updated = await api(`/rounds/${round.id}/settled`, {
+    method: "POST",
+    body: JSON.stringify({ revision: round.revision, person, settled }),
+  });
+  if (viewing) viewing = updated; else state.open = updated;
+  render();
+});
+
+const choosePayer = (paidBy) => guard(async () => {
+  const round = shown();
+  const updated = await api(`/rounds/${round.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ revision: round.revision, paidBy: paidBy || null }),
+  });
+  if (viewing) viewing = updated; else state.open = updated;
+  render();
+});
 
 function renderHistory() {
   const closed = state.rounds.filter((r) => r.status === "closed");
@@ -519,6 +590,7 @@ const confirmClose = () => guard(async () => {
       revision: state.open.revision,
       discount,
       shippingPence: Math.round(Number($("shipping").value || 0) * 100),
+      paidBy: $("paid-by").value || null,
     }),
   });
   $("close-dialog").close();
@@ -555,7 +627,13 @@ $("variant-sale").addEventListener("change", (event) => {
   $("variant-sale-label").classList.toggle("on", event.target.checked);
 });
 $("variant-cancel").addEventListener("click", () => { pending = null; $("variant-dialog").close(); });
-$("close-round").addEventListener("click", () => $("close-dialog").showModal());
+$("close-round").addEventListener("click", () => {
+  // Only people with something in the round can have paid for it.
+  const people = [...new Set((shown()?.items ?? []).map((i) => i.person))].sort();
+  $("paid-by").innerHTML = `<option value="">decide later</option>`
+    + people.map((p) => `<option value="${esc(p)}" ${p === me() ? "selected" : ""}>${esc(p)}</option>`).join("");
+  $("close-dialog").showModal();
+});
 $("close-cancel").addEventListener("click", () => $("close-dialog").close());
 $("close-confirm").addEventListener("click", confirmClose);
 $("reopen-round").addEventListener("click", doReopen);

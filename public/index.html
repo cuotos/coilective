@@ -233,6 +233,21 @@
 
   .no-sale-note { color: var(--faint); font-size: 0.8rem; }
 
+  /* ---------- who owes whom ---------- */
+
+  .payer { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; color: var(--muted); }
+  .payer strong { color: var(--ink); }
+  .settle td.paid-cell { text-align: right; }
+  .paid-toggle {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    color: var(--faint); cursor: pointer; font-size: 0.85rem;
+  }
+  .paid-toggle input { margin: 0; accent-color: var(--accent); }
+  .paid-toggle.on { color: var(--accent); }
+  .settle tr.is-payer td { color: var(--muted); }
+  .outstanding { color: var(--warn); }
+  .outstanding.clear { color: var(--accent); }
+
   .history li { display: flex; align-items: baseline; gap: 0.5rem; }
   .history .grow-link { flex: 1 1 auto; }
   .history .amount {
@@ -421,6 +436,10 @@
   <div class="row" style="margin-top:0.5rem">
     <label for="shipping" style="color:var(--muted)">Postage</label>
     <input id="shipping" type="text" inputmode="decimal" placeholder="0.00" style="width:7rem">
+  </div>
+  <div class="row" style="margin-top:0.5rem">
+    <label for="paid-by" style="color:var(--muted)">Paid by</label>
+    <select id="paid-by"></select>
   </div>
   <div class="row" style="margin-top:0.9rem; justify-content:flex-end">
     <button id="close-cancel" type="button">Cancel</button>

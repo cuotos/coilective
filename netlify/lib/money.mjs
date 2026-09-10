@@ -84,6 +84,10 @@ const spend = (items) => items.reduce((sum, i) => sum + i.unitPricePence * i.qty
  *
  * Both are proportional, so everyone lands on the same effective rate for the
  * part that applies to them, and nobody subsidises anybody.
+ *
+ * One person pays the store, so what everyone else owes is owed to them. The
+ * payer's own share is already spent, never a debt, and `settledBy` records
+ * who has since squared up.
  */
 export function settleRound(round) {
   const items = round.items ?? [];
@@ -100,10 +104,18 @@ export function settleRound(round) {
 
   const discountShares = splitProportionally(discount, saleSpend);
   const shippingShares = splitProportionally(shipping, subtotals);
+  const owed = people.map((_, i) => subtotals[i] - discountShares[i] + shippingShares[i]);
+
+  const paidBy = round.paidBy ?? null;
+  const settledBy = new Set(round.settledBy ?? []);
 
   return {
+    paidBy,
     people: people.map((person, i) => ({
       person,
+      // The payer is square by definition: they are the one out of pocket.
+      isPayer: person === paidBy,
+      settled: person === paidBy || settledBy.has(person),
       itemCount: mine(person).reduce((n, it) => n + it.qty, 0),
       subtotalPence: subtotals[i],
       // What of their spend the discount could apply to, so the UI can show
@@ -111,13 +123,22 @@ export function settleRound(round) {
       discountablePence: saleSpend[i],
       discountPence: discountShares[i],
       shippingPence: shippingShares[i],
-      owesPence: subtotals[i] - discountShares[i] + shippingShares[i],
+      owesPence: owed[i],
     })),
     subtotalPence: subtotal,
     discountablePence: discountable,
     discountPence: discount,
     shippingPence: shipping,
     totalPence: subtotal - discount + shipping,
+    // What the payer is still waiting on. Zero once everyone has settled, and
+    // null while nobody has said who paid.
+    outstandingPence: paidBy === null
+      ? null
+      : people.reduce(
+          (sum, person, i) =>
+            person === paidBy || settledBy.has(person) ? sum : sum + owed[i],
+          0,
+        ),
   };
 }
 

@@ -298,16 +298,62 @@ export async function setQty(id, revision, itemId, qty) {
   });
 }
 
-/** Closing is when the discount and postage are known, so they are set here. */
-export async function closeRound(id, revision, { discount, shippingPence }) {
+/**
+ * Closing is when the discount, postage and payer are known, so they are set
+ * here. The payer can be left out and filled in afterwards — sometimes the
+ * order goes in before anyone has worked out whose card is on it.
+ */
+export async function closeRound(id, revision, { discount, shippingPence, paidBy }) {
   return mutate(id, revision, (r) => {
     if (r.status === "closed") throw new BadRequest("That round is already closed.");
     if (r.items.length === 0) throw new BadRequest("Nothing in this round to close.");
     r.discount = normaliseDiscount(discount);
     r.shippingPence = Math.max(0, Math.round(Number(shippingPence) || 0));
+    r.paidBy = paidBy ? whoInRound(r, paidBy) : null;
+    r.settledBy = [];
     r.status = "closed";
     r.closedAt = new Date().toISOString();
     return r;
+  });
+}
+
+/**
+ * The payer has to be someone with items in the round.
+ *
+ * Free text here means a typo invents a person nobody owes, and the whole
+ * point is knowing who to pay. Anyone ordering for the group has something in
+ * it themselves.
+ */
+function whoInRound(round, person) {
+  const name = String(person ?? "").trim().toLowerCase();
+  const people = [...new Set(round.items.map((i) => i.person))];
+  if (!people.includes(name)) {
+    throw new BadRequest(`${name || "Nobody"} has nothing in this round, so can't be the payer.`);
+  }
+  return name;
+}
+
+/** Who fronted the money. Set at close, or corrected later. */
+export async function setPaidBy(id, revision, paidBy) {
+  return mutate(id, revision, (round) => {
+    round.paidBy = paidBy ? whoInRound(round, paidBy) : null;
+    // Debts are owed to the payer, so changing them makes the old ticks
+    // meaningless rather than merely stale.
+    round.settledBy = [];
+    return round;
+  });
+}
+
+/** Ticks somebody off as having paid the payer back, or un-ticks them. */
+export async function setSettled(id, revision, person, settled) {
+  return mutate(id, revision, (round) => {
+    if (!round.paidBy) throw new BadRequest("Say who paid for the order first.");
+    const name = whoInRound(round, person);
+    const already = new Set(round.settledBy ?? []);
+    if (settled === false) already.delete(name);
+    else already.add(name);
+    round.settledBy = [...already].sort();
+    return round;
   });
 }
 

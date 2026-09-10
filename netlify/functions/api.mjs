@@ -14,9 +14,10 @@
  *   POST   /api/rounds/:id/items               add an item
  *   PATCH  /api/rounds/:id/items/:itemId       { qty } or { discounted }
  *   DELETE /api/rounds/:id/items/:itemId       remove
- *   POST   /api/rounds/:id/close               { discount, shippingPence }
+ *   POST   /api/rounds/:id/close               { discount, shippingPence, paidBy }
+ *   POST   /api/rounds/:id/settled             { person, settled } → tick off a debt
  *   POST   /api/rounds/:id/reopen
- *   PATCH  /api/rounds/:id                     { name } → rename
+ *   PATCH  /api/rounds/:id                     { name } or { paidBy }
  *   DELETE /api/rounds/:id                     remove it entirely
  */
 
@@ -27,6 +28,7 @@ import { settleRound } from "../lib/money.mjs";
 import {
   ensureOpenRound, readRound, addItem, removeItem, setQty,
   closeRound, reopenRound, renameRound, deleteRound, setDiscounted,
+  setPaidBy, setSettled,
   readCatalogue, writeCatalogue, NotFound, Conflict, BadRequest,
 } from "../lib/store.mjs";
 
@@ -175,13 +177,22 @@ export default async function handler(request) {
       }
 
       if (method === "POST" && section === "close") {
-        const { revision, discount, shippingPence } = await body();
-        return json(withTotals(await closeRound(id, revision, { discount, shippingPence })));
+        const { revision, discount, shippingPence, paidBy } = await body();
+        return json(withTotals(await closeRound(id, revision, { discount, shippingPence, paidBy })));
       }
 
-      // PATCH /api/rounds/:id  { name }
+      // POST /api/rounds/:id/settled  { person, settled }
+      if (method === "POST" && section === "settled") {
+        const { revision, person, settled } = await body();
+        return json(withTotals(await setSettled(id, revision, person, settled)));
+      }
+
+      // PATCH /api/rounds/:id  { name } or { paidBy }
       if (method === "PATCH" && !section) {
-        const { revision, name } = await body();
+        const { revision, name, paidBy } = await body();
+        if (paidBy !== undefined) {
+          return json(withTotals(await setPaidBy(id, revision, paidBy)));
+        }
         return json(withTotals(await renameRound(id, revision, name)));
       }
 
