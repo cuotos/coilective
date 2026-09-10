@@ -356,24 +356,30 @@ function renderTotals(round) {
 
   const open = round.status === "open";
 
+  // £0.00 is worth saying on an open round: free postage is a thing the order
+  // has earned, and a missing line just looks like a line that is missing.
+  const off = (pence) => `${pence ? "−" : ""}${money(pence)}`;
+
   // An open round has no discount yet, so it shows the one the sale is
   // expected to give — same shape as a closed round's figures, so the numbers
   // sit where you already look for them.
   const discountLine = round.discount
-    ? `<div><span class="label">Discount${round.discount.kind === "percent" ? ` (${round.discount.value}%)` : ""}</span><span class="value">−${money(s.discountPence)}</span></div>`
-    : open && s.estimate.discountPence
-      ? `<div><span class="label">Estimated discount (${s.estimate.percent}%)</span><span class="value">−${money(s.estimate.discountPence)}</span></div>`
+    ? `<div><span class="label">Discount${round.discount.kind === "percent" ? ` (${round.discount.value}%)` : ""}</span><span class="value">${off(s.discountPence)}</span></div>`
+    : open
+      ? `<div><span class="label">Estimated discount (${s.estimate.percent}%)</span><span class="value">${off(s.estimate.discountPence)}</span></div>`
       : "";
 
-  const shippingLine = s.shippingPence
-    ? `<div><span class="label">Postage</span><span class="value">${money(s.shippingPence)}</span></div>`
-    : open && s.estimate.postagePence
-      ? `<div><span class="label">Estimated postage</span><span class="value">${money(s.estimate.postagePence)}</span></div>`
+  const shippingLine = open && !s.shippingPence
+    ? `<div><span class="label">Estimated postage</span><span class="value">${money(s.estimate.postagePence)}</span></div>`
+    : s.shippingPence
+      ? `<div><span class="label">Postage</span><span class="value">${money(s.shippingPence)}</span></div>`
       : "";
 
   // The list total stays, with the estimate under it, so the saving is the
   // difference between two figures you can both see.
-  const estimatedTotalLine = open && (s.estimate.discountPence || s.estimate.postagePence)
+  const totalPence = open ? s.subtotalPence + s.estimate.postagePence : s.totalPence;
+
+  const estimatedTotalLine = open
     ? `<div class="grand estimated"><span class="label">Estimated total</span><span class="value">${money(s.estimate.totalPence)}</span></div>`
     : "";
 
@@ -400,8 +406,8 @@ function renderTotals(round) {
   $("totals").innerHTML = `
     <div class="totals">
       <div><span class="label">Items</span><span class="value">${money(s.subtotalPence)}</span></div>
-      ${discountLine}${shippingLine}
-      <div class="grand"><span class="label">Total</span><span class="value">${money(s.totalPence)}</span></div>
+      ${shippingLine}${discountLine}
+      <div class="grand"><span class="label">Total</span><span class="value">${money(totalPence)}</span></div>
       ${estimatedTotalLine}
     </div>
     ${renderEstimate(round)}
