@@ -192,3 +192,19 @@ test("the estimate counts spools, not lines, and ignores what the sale misses", 
   assert.equal(s.estimate.spools, 6);
   assert.equal(s.estimate.percent, 40);
 });
+
+test("postage is the usual £4 until the order earns its way out of it", () => {
+  assert.equal(estimateDiscount(2).postagePence, 400);
+  assert.equal(estimateDiscount(3).postagePence, 0);
+  assert.equal(estimateDiscount(10).postagePence, 0);
+});
+
+test("the estimated total counts postage, not just the discount", () => {
+  // One spool: no discount, but £4 to post it.
+  const one = settleRound({ items: [{ person: "dan", unitPricePence: 1799, qty: 1 }] });
+  assert.equal(one.estimate.totalPence, 1799 + 400);
+
+  // Four: 30% off and free postage.
+  const four = settleRound({ items: [{ person: "dan", unitPricePence: 1799, qty: 4 }] });
+  assert.equal(four.estimate.totalPence, 7196 - 2159);
+});

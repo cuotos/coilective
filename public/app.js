@@ -333,10 +333,10 @@ function renderEstimate(round) {
   const e = round.settlement.estimate;
 
   const earned = e.percent
-    ? `about <strong>${e.percent}% off</strong>${e.freePostage ? " and free postage" : ""}`
+    ? `about <strong>${e.percent}% off</strong>${e.freePostage ? " and free postage" : ` and ${money(e.postagePence)} postage`}`
     : e.freePostage
       ? "<strong>free postage</strong>"
-      : "no discount yet";
+      : `no discount, and ${money(e.postagePence)} postage`;
 
   const next = !e.next
     ? "That is the best tier."
@@ -367,11 +367,13 @@ function renderTotals(round) {
 
   const shippingLine = s.shippingPence
     ? `<div><span class="label">Postage</span><span class="value">${money(s.shippingPence)}</span></div>`
-    : "";
+    : open && s.estimate.postagePence
+      ? `<div><span class="label">Estimated postage</span><span class="value">${money(s.estimate.postagePence)}</span></div>`
+      : "";
 
   // The list total stays, with the estimate under it, so the saving is the
   // difference between two figures you can both see.
-  const estimatedTotalLine = open && s.estimate.discountPence
+  const estimatedTotalLine = open && (s.estimate.discountPence || s.estimate.postagePence)
     ? `<div class="grand estimated"><span class="label">Estimated total</span><span class="value">${money(s.estimate.totalPence)}</span></div>`
     : "";
 
@@ -785,7 +787,8 @@ $("close-round").addEventListener("click", () => {
     $("discount-value").disabled = false;
     $("discount-value").value = String(e.percent);
   }
-  if (e?.freePostage) $("shipping").value = "0.00";
+  // Postage is £4 unless the order earned its way out of it.
+  if (e) $("shipping").value = (e.postagePence / 100).toFixed(2);
 
   // Only people with something in the round can have paid for it.
   const people = [...new Set((round?.items ?? []).map((i) => i.person))].sort();

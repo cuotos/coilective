@@ -169,7 +169,9 @@ different someone makes the old ticks meaningless rather than merely stale.
 ### What another spool is worth
 
 The open round estimates what the bulk sale would give it: roughly free
-postage at three spools, 30% at four, 40% at six, 43% at ten. The number
+postage at three spools, 30% at four, 40% at six, 43% at ten. Below three,
+postage is the usual £4, and the estimate counts it — a small order saving 30%
+and paying £4 to post can come to more than a bigger one that posts free. The number
 worth showing is the *gap* to the next tier, since that is the entire reason
 for pooling an order — "two more and it is about 40% off" is what makes
 somebody add the spool they were putting off.

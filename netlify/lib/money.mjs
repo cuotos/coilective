@@ -84,6 +84,9 @@ const TIERS = [
 
 const FREE_POSTAGE_AT = 3;
 
+/** What postage comes to when the order has not earned its way out of it. */
+const STANDARD_POSTAGE_PENCE = 400;
+
 /**
  * The tier a given number of spools reaches, and the next one up.
  *
@@ -94,10 +97,14 @@ export function estimateDiscount(spools) {
   const reached = TIERS.filter((t) => spools >= t.spools).at(-1) ?? null;
   const next = TIERS.find((t) => spools < t.spools) ?? null;
 
+  const freePostage = spools >= FREE_POSTAGE_AT;
+
   return {
     spools,
     percent: reached?.percent ?? 0,
-    freePostage: spools >= FREE_POSTAGE_AT,
+    freePostage,
+    // Postage is the usual £4 until the order earns its way out of it.
+    postagePence: freePostage ? 0 : STANDARD_POSTAGE_PENCE,
     // What another few spools would be worth, so the wishlist can say so.
     next: next && {
       spools: next.spools,
@@ -168,7 +175,9 @@ export function settleRound(round) {
     estimate: {
       ...tier,
       discountPence: estimatedDiscount,
-      totalPence: subtotal - estimatedDiscount,
+      // Postage counts: a small order saving 30% and paying £4 to post can
+      // come to more than a bigger one that posts free.
+      totalPence: subtotal - estimatedDiscount + tier.postagePence,
     },
     people: people.map((person, i) => ({
       person,
