@@ -17,7 +17,7 @@
  *   POST   /api/rounds/:id/close               { discount, shippingPence, paidBy }
  *   POST   /api/rounds/:id/settled             { person, settled } → tick off a debt
  *   POST   /api/rounds/:id/reopen
- *   PATCH  /api/rounds/:id                     { name } or { paidBy }
+ *   PATCH  /api/rounds/:id                     { name }, { paidBy } or { closedAt }
  *   DELETE /api/rounds/:id                     remove it entirely
  */
 
@@ -28,7 +28,7 @@ import { settleRound } from "../lib/money.mjs";
 import {
   ensureOpenRound, readRound, addItem, removeItem, setQty,
   closeRound, reopenRound, renameRound, deleteRound, setDiscounted,
-  setPaidBy, setSettled,
+  setPaidBy, setSettled, setClosedAt,
   readCatalogue, writeCatalogue, NotFound, Conflict, BadRequest,
 } from "../lib/store.mjs";
 
@@ -81,6 +81,9 @@ export default async function handler(request) {
           name: r.name,
           status: r.status,
           createdAt: r.createdAt,
+          // A closed round is dated by when it closed: that is the day the
+          // order went in, which is what the history is a list of.
+          closedAt: r.closedAt ?? null,
           itemCount: r.items.reduce((n, i) => n + i.qty, 0),
           totalPence: settleRound(r).totalPence,
         })),
@@ -187,11 +190,14 @@ export default async function handler(request) {
         return json(withTotals(await setSettled(id, revision, person, settled)));
       }
 
-      // PATCH /api/rounds/:id  { name } or { paidBy }
+      // PATCH /api/rounds/:id  { name }, { paidBy } or { closedAt }
       if (method === "PATCH" && !section) {
-        const { revision, name, paidBy } = await body();
+        const { revision, name, paidBy, closedAt } = await body();
         if (paidBy !== undefined) {
           return json(withTotals(await setPaidBy(id, revision, paidBy)));
+        }
+        if (closedAt !== undefined) {
+          return json(withTotals(await setClosedAt(id, revision, closedAt)));
         }
         return json(withTotals(await renameRound(id, revision, name)));
       }

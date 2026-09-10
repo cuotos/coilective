@@ -52,6 +52,11 @@ Rounds are named after the month they began, with a number if that is taken,
 and can be renamed to whatever people actually call them. Closed rounds stay
 readable so you can still see who owed what.
 
+A closed round is dated by the day it closed, not the day it opened — that is
+the day the order went in, which is what the history is a list of. Entering an
+old order after the fact closes it today, so the date is correctable, and
+history sorts on it.
+
 Reopening a closed round absorbs the empty successor standing in its way. One
 with items in it is somebody's wishlist and is left alone.
 

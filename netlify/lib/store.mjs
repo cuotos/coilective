@@ -390,6 +390,26 @@ export async function setDiscounted(id, revision, itemId, discounted) {
   });
 }
 
+/**
+ * Corrects the date a round was ordered.
+ *
+ * A closed round is dated by when it closed, because that is the day the order
+ * went in — which is what anybody looking back wants to know. Entering an old
+ * order retrospectively closes it today, so the date has to be settable.
+ */
+export async function setClosedAt(id, revision, closedAt) {
+  const when = new Date(closedAt);
+  if (Number.isNaN(when.getTime())) throw new BadRequest("That isn't a date.");
+  if (when.getTime() > Date.now() + 86_400_000) {
+    throw new BadRequest("An order can't have been placed in the future.");
+  }
+  return mutate(id, revision, (round) => {
+    if (round.status !== "closed") throw new BadRequest("That round is still open.");
+    round.closedAt = when.toISOString();
+    return round;
+  });
+}
+
 /** Renames a round. The name lives only here, so nothing else needs updating. */
 export async function renameRound(id, revision, name) {
   const trimmed = String(name ?? "").trim();

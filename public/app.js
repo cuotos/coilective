@@ -217,6 +217,7 @@ function render() {
     $("round-name").textContent = "Loading…";
     $("round-status").hidden = true;
     $("rename-round").hidden = true;
+    $("redate-round").hidden = true;
     $("add-form").hidden = true;
     $("close-round").hidden = true;
     $("reopen-round").hidden = true;
@@ -226,9 +227,13 @@ function render() {
   const open = round.status === "open";
   $("round-name").textContent = round.name;
   $("round-status").hidden = false;
-  $("round-status").textContent = open ? "open" : "closed";
+  $("round-status").textContent = open
+    ? "open"
+    : `ordered ${new Date(orderedOn(round)).toLocaleDateString("en-GB")}`;
   $("round-status").className = `pill ${open ? "pill-open" : "pill-closed"}`;
   $("rename-round").hidden = false;
+  // Only a closed round has an order date to correct.
+  $("redate-round").hidden = open;
   $("add-form").hidden = !open;
   $("close-round").hidden = !open;
   $("reopen-round").hidden = open;
@@ -383,6 +388,27 @@ function payerLine(round, settlement) {
   </div>`;
 }
 
+/**
+ * Correct the day the order went in.
+ *
+ * Needed because a round entered after the fact closes today. Asked for as
+ * YYYY-MM-DD, which is unambiguous — 07/04 and 04/07 are not.
+ */
+const redateRound = () => guard(async () => {
+  const round = shown();
+  const current = orderedOn(round).slice(0, 10);
+  const answer = prompt("What day did this order go in? (YYYY-MM-DD)", current);
+  if (answer === null || !answer.trim() || answer.trim() === current) return;
+
+  const updated = await api(`/rounds/${round.id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ revision: round.revision, closedAt: answer.trim() }),
+  });
+  if (viewing) viewing = updated; else state.open = updated;
+  state = await api("/state");
+  render();
+});
+
 const setSettledUp = (person, settled) => guard(async () => {
   const round = shown();
   const updated = await api(`/rounds/${round.id}/settled`, {
@@ -403,13 +429,21 @@ const choosePayer = (paidBy) => guard(async () => {
   render();
 });
 
+/** When the order went in: the day it closed, falling back to when it started. */
+const orderedOn = (round) => round.closedAt ?? round.createdAt;
+
 function renderHistory() {
-  const closed = state.rounds.filter((r) => r.status === "closed");
+  const closed = state.rounds
+    .filter((r) => r.status === "closed")
+    // Newest order first, by the date it went in rather than the date the
+    // round was started — a round entered retrospectively has today's start.
+    .sort((a, b) => new Date(orderedOn(b)) - new Date(orderedOn(a)));
+
   $("history-panel").hidden = closed.length === 0;
   $("history").innerHTML = closed.map((r) => `
     <li>
       <span class="grow-link"><a href="#" data-round="${r.id}">${esc(r.name)}</a>
-        <span class="variant"> — ${new Date(r.createdAt).toLocaleDateString("en-GB")}, ${r.itemCount} spools</span></span>
+        <span class="variant"> — ${new Date(orderedOn(r)).toLocaleDateString("en-GB")}, ${r.itemCount} spools</span></span>
       <span class="amount">${money(r.totalPence)}</span>
       <button class="quiet danger" data-delete="${r.id}" data-name="${esc(r.name)}" title="Delete this round">✕</button>
     </li>`).join("");
@@ -639,6 +673,7 @@ $("close-confirm").addEventListener("click", confirmClose);
 $("reopen-round").addEventListener("click", doReopen);
 $("change-name").addEventListener("click", () => askName({ force: true }));
 $("rename-round").addEventListener("click", renameRound);
+$("redate-round").addEventListener("click", redateRound);
 $("theme-toggle").addEventListener("click", () => setTheme(theme() === "dark" ? "light" : "dark"));
 $("lock-save").addEventListener("click", unlock);
 $("lock-input").addEventListener("keydown", (e) => e.key === "Enter" && unlock());
