@@ -7,6 +7,8 @@
  * again.
  */
 
+import config from "../../sale.config.mjs";
+
 /** "17.99" or 17.99 → 1799. Throws rather than guess at nonsense. */
 export function toPence(value) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -66,26 +68,58 @@ export function splitProportionally(totalPence, weights) {
 }
 
 /**
- * What Bambu's bulk sale tends to give you, by spool count.
+ * The sale tiers, read from sale.config.mjs at the root of the repo.
  *
- * An estimate, not a promise: these are the tiers we keep seeing rather than
- * anything published, and they move. It exists so a wishlist can say "two
- * more and everyone saves another 3%", which is the whole reason for pooling
- * an order in the first place.
+ * They live in a file of their own because they are not facts about the
+ * software — they are what Bambu happened to be doing last time, and they
+ * move. Editing them should not mean reading this.
  *
- * Free postage arrives at three and stays.
+ * Checked on load rather than trusted. A malformed edit that threw here would
+ * take the API down with a clear message, which is a far better outcome than
+ * quietly telling everybody the wrong discount.
  */
-const TIERS = [
-  { spools: 3, percent: 0 },
-  { spools: 4, percent: 30 },
-  { spools: 6, percent: 40 },
-  { spools: 10, percent: 43 },
-];
+const SALE = readSaleConfig(config);
 
-const FREE_POSTAGE_AT = 3;
+export function readSaleConfig({ postagePence, freePostageAt, tiers } = {}) {
+  const whole = (value) => Number.isInteger(value) && value >= 0;
 
-/** What postage comes to when the order has not earned its way out of it. */
-const STANDARD_POSTAGE_PENCE = 400;
+  if (!whole(postagePence)) throw new TypeError("sale.config.mjs: postagePence must be whole pence.");
+  if (!whole(freePostageAt) || freePostageAt < 1) {
+    throw new TypeError("sale.config.mjs: freePostageAt must be a spool count of at least 1.");
+  }
+  if (!Array.isArray(tiers) || tiers.length === 0) {
+    throw new TypeError("sale.config.mjs: tiers must list at least one tier.");
+  }
+  for (const tier of tiers) {
+    if (!whole(tier?.spools) || tier.spools < 1) {
+      throw new TypeError(`sale.config.mjs: a tier needs a spool count of at least 1 (got ${tier?.spools}).`);
+    }
+    if (!Number.isFinite(tier.percent) || tier.percent < 0 || tier.percent > 100) {
+      throw new TypeError(`sale.config.mjs: ${tier.spools} spools has a percent of ${tier.percent}.`);
+    }
+  }
+
+  // The free-postage point is a step on the same ladder, so the "next tier"
+  // nudge can point at it while it is still the nearest thing to reach for.
+  const steps = [...tiers];
+  if (!steps.some((t) => t.spools === freePostageAt)) steps.push({ spools: freePostageAt, percent: 0 });
+  steps.sort((a, b) => a.spools - b.spools);
+
+  for (let i = 1; i < steps.length; i += 1) {
+    if (steps[i].spools === steps[i - 1].spools) {
+      throw new TypeError(`sale.config.mjs: ${steps[i].spools} spools is listed twice.`);
+    }
+    if (steps[i].percent < steps[i - 1].percent) {
+      throw new TypeError(
+        `sale.config.mjs: ${steps[i].spools} spools gives ${steps[i].percent}%, `
+        + `less than the ${steps[i - 1].percent}% at ${steps[i - 1].spools}. `
+        + `A bigger order cannot be worth less.`,
+      );
+    }
+  }
+
+  return { postagePence, freePostageAt, steps };
+}
 
 /**
  * The tier a given number of spools reaches, and the next one up.
@@ -94,23 +128,23 @@ const STANDARD_POSTAGE_PENCE = 400;
  * a bulk discount.
  */
 export function estimateDiscount(spools) {
-  const reached = TIERS.filter((t) => spools >= t.spools).at(-1) ?? null;
-  const next = TIERS.find((t) => spools < t.spools) ?? null;
+  const reached = SALE.steps.filter((t) => spools >= t.spools).at(-1) ?? null;
+  const next = SALE.steps.find((t) => spools < t.spools) ?? null;
 
-  const freePostage = spools >= FREE_POSTAGE_AT;
+  const freePostage = spools >= SALE.freePostageAt;
 
   return {
     spools,
     percent: reached?.percent ?? 0,
     freePostage,
     // Postage is the usual £4 until the order earns its way out of it.
-    postagePence: freePostage ? 0 : STANDARD_POSTAGE_PENCE,
+    postagePence: freePostage ? 0 : SALE.postagePence,
     // What another few spools would be worth, so the wishlist can say so.
     next: next && {
       spools: next.spools,
       more: next.spools - spools,
       percent: next.percent,
-      freePostage: next.spools === FREE_POSTAGE_AT,
+      freePostage: next.spools === SALE.freePostageAt,
     },
   };
 }

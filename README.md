@@ -34,6 +34,7 @@ requires no setup and no connection string.
 ## How it works
 
 ```
+sale.config.mjs              the bulk-sale tiers, editable
 public/index.html            the whole UI
 public/app.js                fetch state, render, mutate
 netlify/functions/api.mjs    every endpoint, one small router
@@ -183,7 +184,20 @@ different someone makes the old ticks meaningless rather than merely stale.
 The open round estimates what the bulk sale would give it: roughly free
 postage at three spools, 30% at four, 40% at six, 43% at ten. Below three,
 postage is the usual £4, and the estimate counts it — a small order saving 30%
-and paying £4 to post can come to more than a bigger one that posts free. The number
+and paying £4 to post can come to more than a bigger one that posts free.
+
+Those numbers live in **`sale.config.mjs`** at the root, because they are not
+facts about the software — they are what Bambu happened to be doing last time,
+and they move. Edit, commit, redeploy; nothing else needs touching.
+
+They cannot live in `netlify.toml`: variables declared there are build-time
+only and functions never see them, and its schema is Netlify's own, so an
+extra table would be ignored and would need a TOML parser to read anyway.
+
+The file is checked on load and refuses to start on a bad edit — a duplicate
+spool count, a percentage over 100, or a bigger order worth less than a
+smaller one. Taking the API down with a clear message beats quietly telling
+everybody the wrong discount. The number
 worth showing is the *gap* to the next tier, since that is the entire reason
 for pooling an order — "two more and it is about 40% off" is what makes
 somebody add the spool they were putting off.

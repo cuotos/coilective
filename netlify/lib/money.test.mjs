@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toPence, formatMoney, splitProportionally, settleRound, discountPence, estimateDiscount } from "./money.mjs";
+import { toPence, formatMoney, splitProportionally, settleRound, discountPence, estimateDiscount, readSaleConfig } from "./money.mjs";
 
 test("parses the price strings Bambu actually returns", () => {
   assert.equal(toPence("17.99"), 1799);
@@ -272,4 +272,49 @@ test("line discounts add up to the round's discount, and to each person's", () =
     s.lines.a.discountPence + s.lines.b.discountPence + s.lines.d.discountPence,
     dan.discountPence,
   );
+});
+
+test("the sale config is read as written, in any order", () => {
+  const sale = readSaleConfig({
+    postagePence: 500,
+    freePostageAt: 2,
+    tiers: [{ spools: 8, percent: 45 }, { spools: 3, percent: 25 }],
+  });
+  assert.equal(sale.postagePence, 500);
+  // Sorted by spool count, with the free-postage point folded in as a step so
+  // the "next tier" nudge can point at it.
+  assert.deepEqual(sale.steps, [
+    { spools: 2, percent: 0 },
+    { spools: 3, percent: 25 },
+    { spools: 8, percent: 45 },
+  ]);
+});
+
+test("a tier already at the free-postage count is not duplicated", () => {
+  const sale = readSaleConfig({
+    postagePence: 400,
+    freePostageAt: 3,
+    tiers: [{ spools: 3, percent: 10 }],
+  });
+  assert.deepEqual(sale.steps, [{ spools: 3, percent: 10 }]);
+});
+
+test("a malformed sale config refuses to load rather than misprice an order", () => {
+  const good = { postagePence: 400, freePostageAt: 3, tiers: [{ spools: 4, percent: 30 }] };
+
+  // A bigger order cannot be worth less than a smaller one.
+  assert.throws(
+    () => readSaleConfig({ ...good, tiers: [{ spools: 4, percent: 30 }, { spools: 6, percent: 20 }] }),
+    /cannot be worth less/,
+  );
+  assert.throws(
+    () => readSaleConfig({ ...good, tiers: [{ spools: 4, percent: 30 }, { spools: 4, percent: 40 }] }),
+    /listed twice/,
+  );
+  assert.throws(() => readSaleConfig({ ...good, tiers: [] }), /at least one tier/);
+  assert.throws(() => readSaleConfig({ ...good, tiers: [{ spools: 0, percent: 30 }] }), /at least 1/);
+  assert.throws(() => readSaleConfig({ ...good, tiers: [{ spools: 4, percent: 140 }] }), /percent/);
+  assert.throws(() => readSaleConfig({ ...good, postagePence: 4.5 }), /whole pence/);
+  assert.throws(() => readSaleConfig({ ...good, freePostageAt: 0 }), /at least 1/);
+  assert.throws(() => readSaleConfig(), /postagePence/);
 });
