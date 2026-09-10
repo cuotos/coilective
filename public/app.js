@@ -258,6 +258,25 @@ function saleNote(item, editable) {
     title="Put this back in the sale">not in the sale</button>`;
 }
 
+/**
+ * What a line came to, list price and after the discount reaching it.
+ *
+ * "So what did that spool actually cost?" is the question, and the answer is
+ * not the shelf price. Both figures appear so the saving is visible, and only
+ * one when the discount does not touch it — a strikethrough over an identical
+ * number reads as a bug.
+ */
+function linePrice(round, item, editable) {
+  const line = round.settlement.lines[item.id];
+  const after = editable ? line.estimate.totalPence : line.totalPence;
+  const list = line.listPence;
+
+  // Two cells always, so every row's figures sit under the row above. When
+  // the discount misses a line the "was" cell is simply empty.
+  return `<span class="was">${after === list ? "" : money(list, item.currency)}</span>
+    <span class="now">${money(after, item.currency)}</span>`;
+}
+
 function renderItems(round) {
   const box = $("items");
   if (round.items.length === 0) {
@@ -274,11 +293,24 @@ function renderItems(round) {
     const summary = owed.get(person);
     const mine = person.toLowerCase() === me().toLowerCase();
 
+    // On an open round the running total is what the spools list for, which
+    // nobody will actually pay — so the figure they will is next to it.
+    const estimated = summary.estimate.owesPence;
+    const running = !editable
+      ? `<span class="was"></span><span class="owes now">${money(summary.owesPence)}</span>`
+      // Both figures only when they differ — showing the same number twice,
+      // one of them struck through, reads as a bug.
+      : estimated === summary.subtotalPence
+        ? `<span class="was"></span><span class="owes now">${money(estimated)}</span>`
+        : `<span class="owes list was">${money(summary.subtotalPence)}</span>
+           <span class="owes estimated now">${money(estimated)}</span>`;
+
     return `<div class="person-block">
       <div class="person-head">
         <span class="name">${esc(person)}${mine ? " (you)" : ""}</span>
-        <span class="count">${summary.itemCount} spool${summary.itemCount === 1 ? "" : "s"}</span>
-        <span class="owes">${money(summary.owesPence)}</span>
+        <span class="count">${spools(summary.itemCount)}</span>
+        ${running}
+        ${editable ? `<span class="row-end"></span>` : ""}
       </div>
       ${items.map((item) => `
         <div class="item ${item.discounted === false ? "excluded" : ""}" data-item="${item.id}">
@@ -290,12 +322,12 @@ function renderItems(round) {
                 ? `<a href="${esc(item.url)}" target="_blank" rel="noopener">${esc(item.productName)}</a>`
                 : esc(item.productName)}</div>
             ${item.variant ? `<div class="variant">${esc(item.variant)}</div>` : ""}
+            ${saleNote(item, editable)}
           </div>
-          ${saleNote(item, editable)}
-          ${editable
+          <span class="qty-cell">${editable
             ? `<input class="qty" type="number" min="1" max="99" value="${item.qty}" data-qty="${item.id}">`
-            : `<span class="variant">×${item.qty}</span>`}
-          <span class="line">${money(item.unitPricePence * item.qty, item.currency)}</span>
+            : `×${item.qty}`}</span>
+          ${linePrice(round, item, editable)}
           ${editable ? `<button class="quiet danger" data-remove="${item.id}" title="Remove">✕</button>` : ""}
         </div>`).join("")}
     </div>`;
@@ -380,7 +412,7 @@ function renderTotals(round) {
   const totalPence = open ? s.subtotalPence + s.estimate.postagePence : s.totalPence;
 
   const estimatedTotalLine = open
-    ? `<div class="grand estimated"><span class="label">Estimated total</span><span class="value">${money(s.estimate.totalPence)}</span></div>`
+    ? `<div class="grand estimated"><span class="label">Estimated total after discount</span><span class="value">${money(s.estimate.totalPence)}</span></div>`
     : "";
 
   const settleTable = round.status === "closed"
@@ -619,20 +651,35 @@ const showCatalogueState = () => guard(async () => {
 });
 
 /**
- * Kicks off a rebuild and waits for it.
+ * Pick which variant of the looked-up product to add.
  *
- * The build is paced slowly on purpose — the store rate-limits — so it runs as
- * a background function and we poll for `builtAt` to move.
+ * Built for typing rather than clicking: adding a dozen spools means reading
+ * codes off them one after another, so the list takes the keyboard —
+ * arrow keys move, Enter adds — and focus goes back to the code box
+ * afterwards, ready for the next one.
  */
 function openVariantDialog() {
+  const select = $("variant-select");
+
   $("variant-title").textContent = pending.productName;
-  $("variant-select").innerHTML = pending.variants.map((v, i) =>
+  select.innerHTML = pending.variants.map((v, i) =>
     `<option value="${i}"${v.inStock ? "" : " disabled"}>${esc(v.label)} — ${money(v.pricePence, v.currency)}${v.inStock ? "" : " (out of stock)"}</option>`,
   ).join("");
+
+  // A visible list rather than a dropdown when there is a choice to make:
+  // arrow keys move the selection predictably, and every price is on screen
+  // at once instead of behind a click.
+  select.size = pending.variants.length > 1 ? Math.min(pending.variants.length, 6) : 1;
+
+  // Start on something you can actually buy.
+  const inStock = pending.variants.findIndex((v) => v.inStock);
+  select.value = String(inStock === -1 ? 0 : inStock);
+
   $("variant-qty").value = "1";
   $("variant-sale").checked = true;
   $("variant-sale-label").classList.add("on");
   $("variant-dialog").showModal();
+  select.focus();
 }
 
 const addPending = () => guard(async () => {
@@ -655,8 +702,12 @@ const addPending = () => guard(async () => {
   state.open = updated;
   pending = null;
   $("variant-dialog").close();
-  $("url").value = "";
   render();
+
+  // Straight back to the code box for the next spool. render() has just
+  // rewritten the list, so this has to come after it.
+  $("url").value = "";
+  $("url").focus();
 });
 
 /**
@@ -780,7 +831,20 @@ $("variant-add").addEventListener("click", addPending);
 $("variant-sale").addEventListener("change", (event) => {
   $("variant-sale-label").classList.toggle("on", event.target.checked);
 });
-$("variant-cancel").addEventListener("click", () => { pending = null; $("variant-dialog").close(); });
+$("variant-cancel").addEventListener("click", () => {
+  pending = null;
+  $("variant-dialog").close();
+  $("url").focus();
+});
+// Enter adds, from wherever in the dialog you happen to be — the whole point
+// is not reaching for the mouse between spools.
+$("variant-dialog").addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  addPending();
+});
+// And a double-click, for when the mouse is already in your hand.
+$("variant-select").addEventListener("dblclick", addPending);
 $("close-round").addEventListener("click", () => {
   const round = shown();
 

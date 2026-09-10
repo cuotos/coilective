@@ -196,18 +196,34 @@
 
   /* ---------- items ---------- */
 
-  .person-block + .person-block { margin-top: 1.1rem; }
+  .person-block + .person-block { margin-top: 1.6rem; }
 
+  /* Whose spools these are is the thing you scan for, so the name gets to be
+     a heading rather than the first word of a row of similar-sized text. */
   .person-head {
     display: flex; align-items: baseline; gap: 0.6rem;
-    padding-bottom: 0.35rem; border-bottom: 1px solid var(--line);
+    padding: 0.35rem 0.6rem; border-radius: 8px 8px 0 0;
+    background: var(--raised); border-bottom: 2px solid var(--accent-dim);
     margin-bottom: 0.35rem;
   }
-  .person-head .name { font-weight: 600; }
-  .person-head .count { color: var(--faint); font-size: 0.85rem; }
-  .person-head .owes { margin-left: auto; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .person-head .name {
+    font-family: var(--f-display); font-weight: 700; font-size: 1.05rem;
+    letter-spacing: -0.01em; text-transform: capitalize;
+  }
+  /* Pushes the money to the right, however many figures there are. */
+  .person-head .count { color: var(--muted); font-size: 0.85rem; margin-right: auto; }
+  /* Sits over the price columns, so a person's totals head their own rows. */
+  .person-head .owes { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  .person-head .was { text-decoration: line-through; }
+  /* Stands in for the remove button on the rows below, so the money columns
+     in the header sit over the money columns in the list. */
+  .row-end { flex: 0 0 auto; width: 1.9rem; }
+  /* The list price is struck through by the estimate that follows it. */
+  .person-head .owes.list { color: var(--faint); text-decoration: line-through; }
+  .person-head .owes.estimated { color: var(--accent); font-weight: 600; }
 
-  .item { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; }
+  .item { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.6rem; }
+  .item > button.danger { flex: 0 0 auto; width: 1.9rem; padding: 0.3rem 0; }
   .item + .item { border-top: 1px solid var(--line-soft); }
 
   .item .what { flex: 1 1 auto; min-width: 0; }
@@ -216,10 +232,19 @@
   .item a { color: inherit; text-decoration-color: var(--faint); }
 
   .item .qty { width: 3.6rem; text-align: center; padding: 0.3rem; }
-  .item .line {
+  /*
+   * Quantity, list price, price after the discount — one fixed-width column
+   * each, so the figures line up down the list instead of drifting with the
+   * length of the name beside them.
+   */
+  .qty-cell, .was, .now {
+    flex: 0 0 auto; text-align: right; white-space: nowrap;
     font-family: var(--f-mono); font-variant-numeric: tabular-nums;
-    min-width: 5rem; text-align: right;
   }
+  .qty-cell { width: 3.8rem; color: var(--muted); }
+  .was { width: 5.2rem; color: var(--faint); text-decoration: line-through; font-size: 0.85em; }
+  .now { width: 5.6rem; }
+  .item .now { color: var(--accent); }
 
   /* An item the round's discount doesn't apply to. */
   .item.excluded .product, .item.excluded .variant { color: var(--faint); }
@@ -239,7 +264,7 @@
   .estimate strong { color: var(--accent); }
   .estimate-caveat { display: block; margin-top: 0.25rem; color: var(--faint); font-size: 0.8rem; }
 
-  .no-sale-note { color: var(--warn); font-size: 0.8rem; white-space: nowrap; }
+  .no-sale-note { display: inline-block; margin-top: 0.1rem; color: var(--warn); font-size: 0.8rem; white-space: nowrap; }
 
   /* The product name is the way into editing the line, so it has to look
      like something you can press without shouting about it. */
@@ -326,6 +351,9 @@
   }
   dialog::backdrop { background: var(--backdrop); }
   dialog h3 { font-family: var(--f-display); margin: 0 0 0.7rem; font-size: 1.05rem; }
+  /* A list box, not a dropdown: every price visible, arrow keys to move. */
+  #variant-select[size]:not([size="1"]) option { padding: 0.25rem 0.35rem; }
+  #variant-select option:checked { background: var(--accent-dim); color: var(--accent); }
 
   footer { margin-top: 2.5rem; color: var(--faint); font-size: 0.82rem; }
   .version { display: block; margin-top: 0.4rem; }
@@ -456,7 +484,7 @@
 <dialog id="variant-dialog">
   <h3 id="variant-title">Pick one</h3>
   <div class="row">
-    <select class="grow" id="variant-select"></select>
+    <select class="grow" id="variant-select" aria-label="Which variant"></select>
     <input id="variant-qty" type="number" min="1" max="99" value="1" style="width:5rem">
   </div>
   <label class="sale-toggle on" id="variant-sale-label" style="margin-top:0.7rem">

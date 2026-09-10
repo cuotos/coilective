@@ -67,6 +67,12 @@ price, currency and stock, so adding an item is a parse rather than a scrape.
 Paste a product link and pick a colour, or type the five-digit code printed on
 the spool — `11100` is PLA Matte Ivory White.
 
+Adding a dozen spools means reading codes off them one after another, so that
+flow takes the keyboard: type a code, Enter, arrow to the variant, Enter, and
+the code box is focused and empty again. The variant list is a list box rather
+than a dropdown so every price is on screen and the arrow keys behave, and it
+opens on the first variant actually in stock.
+
 Codes are resolved through an index built from the store's own sitemap, so a
 new colour appears after a rebuild with nothing to edit here. The store
 rate-limits hard, so the build is paced slowly and takes about a minute; it
@@ -132,6 +138,12 @@ the same effective rate and nobody subsidises anybody.
 Splits use the largest-remainder method, so the parts always sum to the whole.
 Naive rounding hands out £9.99 of a £10 discount and leaves someone arguing
 over a penny.
+
+The discount is split **per line**, then added up per person. Splitting by
+person first and apportioning within them lets the two disagree by a penny,
+and then a row reading £10.25 sits under a total that only works if it was
+£10.26. One split, aggregated upwards, cannot drift — and it means every row
+can show what it actually cost.
 
 The discount splits only across the items it **applies to**. Each item carries
 an "in the sale" flag, defaulting to yes, and set when the item is added.

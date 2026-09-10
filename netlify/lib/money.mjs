@@ -146,30 +146,64 @@ export function settleRound(round) {
 
   const subtotals = people.map((person) => spend(mine(person)));
   const saleSpend = people.map((person) => spend(mine(person).filter(inSale)));
+  const saleSpools = items.filter(inSale).reduce((n, item) => n + item.qty, 0);
 
   const subtotal = subtotals.reduce((a, b) => a + b, 0);
   const discountable = saleSpend.reduce((a, b) => a + b, 0);
   const discount = discountPence(round.discount, discountable);
   const shipping = round.shippingPence ?? 0;
 
-  const discountShares = splitProportionally(discount, saleSpend);
-  const shippingShares = splitProportionally(shipping, subtotals);
-  const owed = people.map((_, i) => subtotals[i] - discountShares[i] + shippingShares[i]);
-
-  const saleSpools = items
-    .filter(inSale)
-    .reduce((n, item) => n + item.qty, 0);
-
-  const paidBy = round.paidBy ?? null;
-  const settledBy = new Set(round.settledBy ?? []);
-
   const tier = estimateDiscount(saleSpools);
   // Priced here rather than in the page, like every other figure: the sale
   // applies to the discountable spend, not the whole order.
   const estimatedDiscount = discountPence({ kind: "percent", value: tier.percent }, discountable);
 
+  /**
+   * Discounts are split per line, then added up per person.
+   *
+   * Doing it the other way round — split by person, then apportion within
+   * them — lets the two disagree by a penny, and then a line saying £10.25
+   * sits under a total that only works if it was £10.26. One split, aggregated
+   * upwards, cannot drift.
+   */
+  const lineWeights = items.map((item) => (inSale(item) ? item.unitPricePence * item.qty : 0));
+  const lineDiscounts = splitProportionally(discount, lineWeights);
+  const lineEstDiscounts = splitProportionally(estimatedDiscount, lineWeights);
+
+  const sumFor = (person, shares) => items
+    .reduce((total, item, i) => (item.person === person ? total + shares[i] : total), 0);
+
+  const discountShares = people.map((person) => sumFor(person, lineDiscounts));
+  const estDiscountShares = people.map((person) => sumFor(person, lineEstDiscounts));
+
+  const shippingShares = splitProportionally(shipping, subtotals);
+  const owed = people.map((_, i) => subtotals[i] - discountShares[i] + shippingShares[i]);
+
+  const paidBy = round.paidBy ?? null;
+  const settledBy = new Set(round.settledBy ?? []);
+
+  const estPostageShares = splitProportionally(tier.postagePence, subtotals);
+
   return {
     paidBy,
+    /**
+     * What each line came to, keyed by item id.
+     *
+     * `totalPence` is the line after the discount reaching it — the number
+     * somebody wants when they ask "so what did that spool actually cost?".
+     */
+    lines: Object.fromEntries(items.map((item, i) => [
+      item.id,
+      {
+        listPence: item.unitPricePence * item.qty,
+        discountPence: lineDiscounts[i],
+        totalPence: item.unitPricePence * item.qty - lineDiscounts[i],
+        estimate: {
+          discountPence: lineEstDiscounts[i],
+          totalPence: item.unitPricePence * item.qty - lineEstDiscounts[i],
+        },
+      },
+    ])),
     // What the sale would give this many spools. Only meaningful while the
     // round is open; once closed, the real discount is recorded.
     estimate: {
@@ -192,6 +226,13 @@ export function settleRound(round) {
       discountPence: discountShares[i],
       shippingPence: shippingShares[i],
       owesPence: owed[i],
+      // What this person would owe if the sale gives what it usually does.
+      // Only meaningful while the round is open.
+      estimate: {
+        discountPence: estDiscountShares[i],
+        postagePence: estPostageShares[i],
+        owesPence: subtotals[i] - estDiscountShares[i] + estPostageShares[i],
+      },
     })),
     subtotalPence: subtotal,
     discountablePence: discountable,

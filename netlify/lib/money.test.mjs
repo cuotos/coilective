@@ -208,3 +208,68 @@ test("the estimated total counts postage, not just the discount", () => {
   const four = settleRound({ items: [{ person: "dan", unitPricePence: 1799, qty: 4 }] });
   assert.equal(four.estimate.totalPence, 7196 - 2159);
 });
+
+test("each person's estimate splits the same way the real discount will", () => {
+  const s = settleRound({
+    items: [
+      { person: "dan", unitPricePence: 6000, qty: 1 },
+      { person: "matt", unitPricePence: 2000, qty: 1 },
+      { person: "sam", unitPricePence: 2000, qty: 2 },
+    ],
+  });
+  // 4 spools in the sale, so 30% off £120.00 and free postage.
+  assert.equal(s.estimate.percent, 30);
+  assert.equal(s.estimate.discountPence, 3600);
+
+  const of = (name) => s.people.find((p) => p.person === name).estimate;
+  assert.equal(of("dan").discountPence, 1800);   // £60 of £120, so half the £36
+  assert.equal(of("matt").discountPence, 600);
+  assert.equal(of("sam").discountPence, 1200);
+
+  assert.equal(of("dan").owesPence, 6000 - 1800);
+  // The shares add up to the whole, as everywhere else.
+  const shares = s.people.reduce((n, p) => n + p.estimate.owesPence, 0);
+  assert.equal(shares, s.estimate.totalPence);
+});
+
+test("a person's estimate carries their share of postage too", () => {
+  const s = settleRound({
+    items: [
+      { person: "dan", unitPricePence: 3000, qty: 1 },
+      { person: "matt", unitPricePence: 1000, qty: 1 },
+    ],
+  });
+  // Two spools: no discount, £4 postage split by spend 3:1.
+  assert.equal(s.estimate.postagePence, 400);
+  const of = (name) => s.people.find((p) => p.person === name).estimate;
+  assert.equal(of("dan").postagePence, 300);
+  assert.equal(of("matt").postagePence, 100);
+  assert.equal(of("matt").owesPence, 1100);
+});
+
+test("line discounts add up to the round's discount, and to each person's", () => {
+  const round = {
+    discount: { kind: "percent", value: 43.02 },
+    items: [
+      { id: "a", person: "dan", unitPricePence: 1799, qty: 2 },
+      { id: "b", person: "dan", unitPricePence: 2099, qty: 1 },
+      { id: "c", person: "matt", unitPricePence: 1799, qty: 1 },
+      // Out of the sale, so it keeps its full price.
+      { id: "d", person: "dan", unitPricePence: 3499, qty: 1, discounted: false },
+    ],
+  };
+  const s = settleRound(round);
+  const lines = Object.values(s.lines);
+
+  // No penny invented or lost between the lines and the whole.
+  assert.equal(lines.reduce((n, l) => n + l.discountPence, 0), s.discountPence);
+  assert.equal(s.lines.d.discountPence, 0);
+  assert.equal(s.lines.d.totalPence, 3499);
+
+  // And a person's discount is exactly their lines' discounts.
+  const dan = s.people.find((p) => p.person === "dan");
+  assert.equal(
+    s.lines.a.discountPence + s.lines.b.discountPence + s.lines.d.discountPence,
+    dan.discountPence,
+  );
+});
