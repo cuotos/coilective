@@ -373,31 +373,30 @@ function paidTick(settlement, person) {
   </label>`;
 }
 
-/** Who fronted the money, and what they are still owed. */
+/**
+ * Who fronted the money, and what they are still owed.
+ *
+ * The picker is the name in the sentence rather than a control sat beside one,
+ * so the line reads as a statement and is edited by changing the word that is
+ * wrong. Unset, it asks the question in the same position.
+ */
 function payerLine(round, settlement) {
-  const people = settlement.people.map((p) => p.person);
+  const paidBy = settlement.paidBy;
+  const options = [
+    `<option value="" ${paidBy ? "" : "selected"}>${paidBy ? "nobody" : "who?"}</option>`,
+    ...settlement.people.map((p) =>
+      `<option value="${esc(p.person)}" ${p.person === paidBy ? "selected" : ""}>${esc(p.person)}</option>`),
+  ].join("");
 
-  if (!settlement.paidBy) {
-    return `<div class="payer">
-      <span>Who paid for this?</span>
-      <select data-paid-by>
-        <option value="">nobody yet</option>
-        ${people.map((p) => `<option value="${esc(p)}">${esc(p)}</option>`).join("")}
-      </select>
-    </div>`;
-  }
-
-  const outstanding = settlement.outstandingPence;
-  const status = outstanding === 0
-    ? `<span class="outstanding clear">everyone has settled up</span>`
-    : `<span class="outstanding">still owed ${money(outstanding)}</span>`;
+  const status = !paidBy ? ""
+    : settlement.outstandingPence === 0
+      ? `<span class="outstanding clear">everyone has settled up</span>`
+      : `<span class="outstanding">still owed ${money(settlement.outstandingPence)}</span>`;
 
   return `<div class="payer">
-    <span><strong>${esc(settlement.paidBy)}</strong> paid the ${money(settlement.totalPence)}</span>
+    <select class="payer-name" data-paid-by aria-label="Who paid for this order">${options}</select>
+    <span>paid the ${money(settlement.totalPence)}</span>
     ${status}
-    <select data-paid-by>
-      ${people.map((p) => `<option value="${esc(p)}" ${p === settlement.paidBy ? "selected" : ""}>${esc(p)}</option>`).join("")}
-    </select>
   </div>`;
 }
 

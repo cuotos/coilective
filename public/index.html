@@ -237,8 +237,15 @@
 
   /* ---------- who owes whom ---------- */
 
-  .payer { display: flex; align-items: center; gap: 0.5rem; margin-top: 1rem; color: var(--muted); }
-  .payer strong { color: var(--ink); }
+  .payer { display: flex; align-items: baseline; gap: 0.4rem; margin-top: 1rem; color: var(--muted); }
+
+  /* Reads as the noun in the sentence, not a control parked next to it. */
+  .payer-name {
+    font: inherit; font-weight: 600; color: var(--ink);
+    background: none; border: none; border-bottom: 1px dashed var(--line);
+    padding: 0 0.1rem; cursor: pointer;
+  }
+  .payer-name:hover { color: var(--accent); border-bottom-color: var(--accent); }
   .settle td.paid-cell { text-align: right; }
   .paid-toggle {
     display: inline-flex; align-items: center; gap: 0.35rem;
