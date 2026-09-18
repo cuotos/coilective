@@ -14,11 +14,12 @@
  */
 
 import { getStore } from "@netlify/blobs";
-import { toPence } from "./money.mjs";
+import { toPence, saleSet, saleSets, defaultSaleSetName } from "./money.mjs";
 
 const STORE = "coilective";
 const INDEX_KEY = "index";
 const CATALOGUE_KEY = "catalogue";
+const SETTINGS_KEY = "settings";
 
 /**
  * Reads are strongly consistent, deliberately.
@@ -134,6 +135,28 @@ export async function writeCatalogue(catalogue) {
 
   await store().setJSON(CATALOGUE_KEY, next);
   return next;
+}
+
+/**
+ * Site-wide settings. Currently just which sale is on.
+ *
+ * Deliberately shared rather than per-browser: "there is a bulk sale running"
+ * is a fact about the world, not a preference. Everyone adding to the wishlist
+ * should see the same estimate.
+ */
+export async function readSettings() {
+  const stored = await store().get(SETTINGS_KEY, { type: "json" });
+  return { activeSaleSet: stored?.activeSaleSet ?? defaultSaleSetName() };
+}
+
+export async function setActiveSaleSet(name) {
+  const known = saleSets().map((s) => s.name);
+  if (!known.includes(name)) {
+    throw new BadRequest(`No sale called "${name}". Known sales: ${known.join(", ")}.`);
+  }
+  const settings = { ...(await readSettings()), activeSaleSet: name };
+  await store().setJSON(SETTINGS_KEY, settings);
+  return settings;
 }
 
 export class NotFound extends Error {}
@@ -341,9 +364,16 @@ export async function updateItem(id, revision, itemId, patch) {
  * order goes in before anyone has worked out whose card is on it.
  */
 export async function closeRound(id, revision, { discount, shippingPence, paidBy }) {
+  // Frozen onto the round, not looked up later. Storing the name alone would
+  // still drift when somebody edits that set's numbers; storing the whole thing
+  // means an order settled in April still explains itself in December.
+  const { activeSaleSet } = await readSettings();
+  const frozen = saleSet(activeSaleSet);
+
   return mutate(id, revision, (r) => {
     if (r.status === "closed") throw new BadRequest("That round is already closed.");
     if (r.items.length === 0) throw new BadRequest("Nothing in this round to close.");
+    r.saleSet = frozen;
     r.discount = normaliseDiscount(discount);
     r.shippingPence = Math.max(0, Math.round(Number(shippingPence) || 0));
     r.paidBy = paidBy ? whoInRound(r, paidBy) : null;

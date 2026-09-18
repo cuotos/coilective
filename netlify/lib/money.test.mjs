@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { toPence, formatMoney, splitProportionally, settleRound, discountPence, estimateDiscount, readSaleConfig } from "./money.mjs";
+import { toPence, formatMoney, splitProportionally, settleRound, discountPence, estimateDiscount, readSaleSet, saleSets, saleSet, defaultSaleSetName } from "./money.mjs";
 
 test("parses the price strings Bambu actually returns", () => {
   assert.equal(toPence("17.99"), 1799);
@@ -274,12 +274,17 @@ test("line discounts add up to the round's discount, and to each person's", () =
   );
 });
 
-test("the sale config is read as written, in any order", () => {
-  const sale = readSaleConfig({
+
+test("a named sale set is read as written, in any order", () => {
+  const sale = readSaleSet({
+    label: "Test sale",
     postagePence: 500,
     freePostageAt: 2,
     tiers: [{ spools: 8, percent: 45 }, { spools: 3, percent: 25 }],
-  });
+  }, "test");
+
+  assert.equal(sale.name, "test");
+  assert.equal(sale.label, "Test sale");
   assert.equal(sale.postagePence, 500);
   // Sorted by spool count, with the free-postage point folded in as a step so
   // the "next tier" nudge can point at it.
@@ -291,30 +296,90 @@ test("the sale config is read as written, in any order", () => {
 });
 
 test("a tier already at the free-postage count is not duplicated", () => {
-  const sale = readSaleConfig({
-    postagePence: 400,
-    freePostageAt: 3,
-    tiers: [{ spools: 3, percent: 10 }],
-  });
+  const sale = readSaleSet({
+    postagePence: 400, freePostageAt: 3, tiers: [{ spools: 3, percent: 10 }],
+  }, "test");
   assert.deepEqual(sale.steps, [{ spools: 3, percent: 10 }]);
 });
 
-test("a malformed sale config refuses to load rather than misprice an order", () => {
+test("a malformed sale set refuses to load rather than misprice an order", () => {
   const good = { postagePence: 400, freePostageAt: 3, tiers: [{ spools: 4, percent: 30 }] };
+  const read = (patch) => readSaleSet({ ...good, ...patch }, "test");
 
   // A bigger order cannot be worth less than a smaller one.
-  assert.throws(
-    () => readSaleConfig({ ...good, tiers: [{ spools: 4, percent: 30 }, { spools: 6, percent: 20 }] }),
-    /cannot be worth less/,
+  assert.throws(() => read({ tiers: [{ spools: 4, percent: 30 }, { spools: 6, percent: 20 }] }),
+    /cannot be worth less/);
+  assert.throws(() => read({ tiers: [{ spools: 4, percent: 30 }, { spools: 4, percent: 40 }] }),
+    /listed twice/);
+  assert.throws(() => read({ tiers: [] }), /at least one tier/);
+  assert.throws(() => read({ tiers: [{ spools: 0, percent: 30 }] }), /at least 1/);
+  assert.throws(() => read({ tiers: [{ spools: 4, percent: 140 }] }), /percent/);
+  assert.throws(() => read({ postagePence: 4.5 }), /whole pence/);
+  assert.throws(() => read({ freePostageAt: 0 }), /at least 1/);
+
+  // The set name is in the message, so a bad edit says which set is wrong.
+  assert.throws(() => read({ tiers: [] }), /test/);
+});
+
+test("the config exposes every set, and names a default that exists", () => {
+  assert.ok(saleSets().length >= 1, "at least one set");
+  const names = saleSets().map((s) => s.name);
+  assert.ok(names.includes(defaultSaleSetName()), "the default names a set that exists");
+});
+
+test("an unknown set name falls back to the default rather than throwing", () => {
+  // A round can name a set that has since been deleted from the config. That
+  // must not take the whole app down.
+  const fallback = saleSet("no-such-set");
+  assert.equal(fallback.name, defaultSaleSetName());
+});
+
+test("an open round estimates with whichever set is active", () => {
+  const items = [{ person: "dan", unitPricePence: 1000, qty: 4 }];
+
+  const bulk = settleRound({ items }, { activeSaleSet: "bulk" });
+  const easter = settleRound({ items }, { activeSaleSet: "easter" });
+
+  // Four spools: 30% under the bulk sale, 35% under Easter.
+  assert.equal(bulk.estimate.percent, 30);
+  assert.equal(easter.estimate.percent, 35);
+  assert.equal(bulk.estimate.saleSet, "bulk");
+  assert.equal(easter.estimate.saleSet, "easter");
+});
+
+test("a closed round uses the set frozen onto it, not the live one", () => {
+  // The whole point: editing the config, or switching the active set, must not
+  // change what a settled order says.
+  const frozen = readSaleSet(
+    { label: "As it was", postagePence: 400, freePostageAt: 3, tiers: [{ spools: 4, percent: 30 }] },
+    "as-it-was",
   );
-  assert.throws(
-    () => readSaleConfig({ ...good, tiers: [{ spools: 4, percent: 30 }, { spools: 4, percent: 40 }] }),
-    /listed twice/,
-  );
-  assert.throws(() => readSaleConfig({ ...good, tiers: [] }), /at least one tier/);
-  assert.throws(() => readSaleConfig({ ...good, tiers: [{ spools: 0, percent: 30 }] }), /at least 1/);
-  assert.throws(() => readSaleConfig({ ...good, tiers: [{ spools: 4, percent: 140 }] }), /percent/);
-  assert.throws(() => readSaleConfig({ ...good, postagePence: 4.5 }), /whole pence/);
-  assert.throws(() => readSaleConfig({ ...good, freePostageAt: 0 }), /at least 1/);
-  assert.throws(() => readSaleConfig(), /postagePence/);
+
+  const round = {
+    status: "closed",
+    saleSet: frozen,
+    items: [{ person: "dan", unitPricePence: 1000, qty: 4 }],
+  };
+
+  // Active set says 35%; the round's own set says 30% and wins.
+  const s = settleRound(round, { activeSaleSet: "easter" });
+  assert.equal(s.estimate.percent, 30);
+  assert.equal(s.estimate.saleSet, "as-it-was");
+});
+
+test("what a closed round owes never depended on the tiers anyway", () => {
+  // Belt and braces on the property that actually matters. The discount is the
+  // figure typed at close, not one the tiers produce.
+  const round = {
+    status: "closed",
+    discount: { kind: "amount", pence: 1234 },
+    items: [{ person: "dan", unitPricePence: 5000, qty: 2 }],
+  };
+
+  const underBulk = settleRound(round, { activeSaleSet: "bulk" });
+  const underEaster = settleRound(round, { activeSaleSet: "easter" });
+
+  assert.equal(underBulk.discountPence, 1234);
+  assert.equal(underEaster.discountPence, 1234);
+  assert.equal(underBulk.totalPence, underEaster.totalPence);
 });

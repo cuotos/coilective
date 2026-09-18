@@ -376,9 +376,21 @@ function renderEstimate(round) {
       ? `${spools(e.next.more)} more earns free postage.`
       : `${spools(e.next.more)} more and it is about ${e.next.percent}% off.`;
 
+  // The picker sits in the estimate, because that is the only thing the choice
+  // affects — putting it in a settings screen would hide the consequence.
+  const sets = state.settings?.sets ?? [];
+  const picker = sets.length > 1
+    ? `<label class="sale-picker">assuming
+         <select data-sale-set>${sets.map((set) => `
+           <option value="${esc(set.name)}" ${set.name === e.saleSet ? "selected" : ""}>${esc(set.label)}</option>`).join("")}
+         </select></label>`
+    : "";
+
   return `<p class="estimate">
     ${spools(e.spools)} in the sale — ${earned}. ${next}
-    <span class="estimate-caveat">Bambu's tiers are not published, so this is a guess from past orders.</span>
+    ${picker}
+    <span class="estimate-caveat">Bambu's tiers are not published, so this is a guess from past orders.
+      Closing a round freezes whichever sale was chosen, so changing it later cannot alter a settled order.</span>
   </p>`;
 }
 
@@ -450,6 +462,9 @@ function renderTotals(round) {
   }
   const picker = $("totals").querySelector("[data-paid-by]");
   if (picker) picker.addEventListener("change", () => choosePayer(picker.value));
+
+  const salePicker = $("totals").querySelector("[data-sale-set]");
+  if (salePicker) salePicker.addEventListener("change", () => chooseSaleSet(salePicker.value));
 }
 
 /**
@@ -510,6 +525,22 @@ const redateRound = () => guard(async () => {
     body: JSON.stringify({ revision: round.revision, closedAt: answer.trim() }),
   });
   if (viewing) viewing = updated; else state.open = updated;
+  state = await api("/state");
+  render();
+});
+
+/**
+ * Switch which sale the estimate assumes.
+ *
+ * Shared, not per-browser — "there is a bulk sale on" is a fact about the
+ * world. It only ever changes an estimate: closed rounds carry a frozen copy
+ * of the set they were settled under.
+ */
+const chooseSaleSet = (name) => guard(async () => {
+  state.settings = await api("/settings", {
+    method: "PATCH",
+    body: JSON.stringify({ activeSaleSet: name }),
+  });
   state = await api("/state");
   render();
 });

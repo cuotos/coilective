@@ -78,24 +78,42 @@ export function splitProportionally(totalPence, weights) {
  * take the API down with a clear message, which is a far better outcome than
  * quietly telling everybody the wrong discount.
  */
-const SALE = readSaleConfig(config);
+/**
+ * Every set in the config, validated once at load.
+ *
+ * A malformed edit throws here and takes the API down with a message naming
+ * the set — far better than quietly telling everybody the wrong discount.
+ */
+const SETS = Object.fromEntries(
+  Object.entries(config.sets ?? {}).map(([name, set]) => [name, readSaleSet(set, name)]),
+);
 
-export function readSaleConfig({ postagePence, freePostageAt, tiers } = {}) {
+if (Object.keys(SETS).length === 0) {
+  throw new TypeError("sale.config.mjs: no sale sets are defined.");
+}
+if (!SETS[config.default]) {
+  throw new TypeError(
+    `sale.config.mjs: default is "${config.default}", which is not one of: ${Object.keys(SETS).join(", ")}.`,
+  );
+}
+
+export function readSaleSet({ label, postagePence, freePostageAt, tiers } = {}, name = "?") {
+  const where = `sale.config.mjs set "${name}"`;
   const whole = (value) => Number.isInteger(value) && value >= 0;
 
-  if (!whole(postagePence)) throw new TypeError("sale.config.mjs: postagePence must be whole pence.");
+  if (!whole(postagePence)) throw new TypeError(`${where}: postagePence must be whole pence.`);
   if (!whole(freePostageAt) || freePostageAt < 1) {
-    throw new TypeError("sale.config.mjs: freePostageAt must be a spool count of at least 1.");
+    throw new TypeError(`${where}: freePostageAt must be a spool count of at least 1.`);
   }
   if (!Array.isArray(tiers) || tiers.length === 0) {
-    throw new TypeError("sale.config.mjs: tiers must list at least one tier.");
+    throw new TypeError(`${where}: tiers must list at least one tier.`);
   }
   for (const tier of tiers) {
     if (!whole(tier?.spools) || tier.spools < 1) {
-      throw new TypeError(`sale.config.mjs: a tier needs a spool count of at least 1 (got ${tier?.spools}).`);
+      throw new TypeError(`${where}: a tier needs a spool count of at least 1 (got ${tier?.spools}).`);
     }
     if (!Number.isFinite(tier.percent) || tier.percent < 0 || tier.percent > 100) {
-      throw new TypeError(`sale.config.mjs: ${tier.spools} spools has a percent of ${tier.percent}.`);
+      throw new TypeError(`${where}: ${tier.spools} spools has a percent of ${tier.percent}.`);
     }
   }
 
@@ -107,44 +125,63 @@ export function readSaleConfig({ postagePence, freePostageAt, tiers } = {}) {
 
   for (let i = 1; i < steps.length; i += 1) {
     if (steps[i].spools === steps[i - 1].spools) {
-      throw new TypeError(`sale.config.mjs: ${steps[i].spools} spools is listed twice.`);
+      throw new TypeError(`${where}: ${steps[i].spools} spools is listed twice.`);
     }
     if (steps[i].percent < steps[i - 1].percent) {
       throw new TypeError(
-        `sale.config.mjs: ${steps[i].spools} spools gives ${steps[i].percent}%, `
+        `${where}: ${steps[i].spools} spools gives ${steps[i].percent}%, `
         + `less than the ${steps[i - 1].percent}% at ${steps[i - 1].spools}. `
         + `A bigger order cannot be worth less.`,
       );
     }
   }
 
-  return { postagePence, freePostageAt, steps };
+  return { name, label: label ?? name, postagePence, freePostageAt, steps };
 }
+
+/** Which set is used when nobody has chosen one. */
+export const defaultSaleSetName = () => config.default;
+
+/** Every set, for the picker. */
+export const saleSets = () => Object.values(SETS);
+
+/**
+ * One set by name, falling back to the default.
+ *
+ * A round can name a set that has since been removed from the config. That is
+ * a reason to show the default, not to take the app down.
+ */
+export const saleSet = (name) => SETS[name] ?? SETS[config.default];
 
 /**
  * The tier a given number of spools reaches, and the next one up.
  *
+ * Takes the set rather than reading a global, because an open round uses
+ * whichever set is live while a closed round uses the copy frozen onto it.
+ *
  * Counts only spools the sale applies to — a print plate does not earn anyone
  * a bulk discount.
  */
-export function estimateDiscount(spools) {
-  const reached = SALE.steps.filter((t) => spools >= t.spools).at(-1) ?? null;
-  const next = SALE.steps.find((t) => spools < t.spools) ?? null;
+export function estimateDiscount(spools, set = saleSet(config.default)) {
+  const reached = set.steps.filter((t) => spools >= t.spools).at(-1) ?? null;
+  const next = set.steps.find((t) => spools < t.spools) ?? null;
 
-  const freePostage = spools >= SALE.freePostageAt;
+  const freePostage = spools >= set.freePostageAt;
 
   return {
     spools,
+    saleSet: set.name,
+    saleSetLabel: set.label,
     percent: reached?.percent ?? 0,
     freePostage,
-    // Postage is the usual £4 until the order earns its way out of it.
-    postagePence: freePostage ? 0 : SALE.postagePence,
+    // Postage is the usual charge until the order earns its way out of it.
+    postagePence: freePostage ? 0 : set.postagePence,
     // What another few spools would be worth, so the wishlist can say so.
     next: next && {
       spools: next.spools,
       more: next.spools - spools,
       percent: next.percent,
-      freePostage: next.spools === SALE.freePostageAt,
+      freePostage: next.spools === set.freePostageAt,
     },
   };
 }
@@ -173,7 +210,7 @@ const spend = (items) => items.reduce((sum, i) => sum + i.unitPricePence * i.qty
  * payer's own share is already spent, never a debt, and `settledBy` records
  * who has since squared up.
  */
-export function settleRound(round) {
+export function settleRound(round, { activeSaleSet } = {}) {
   const items = round.items ?? [];
   const people = [...new Set(items.map((i) => i.person))].sort();
   const mine = (person) => items.filter((i) => i.person === person);
@@ -187,7 +224,11 @@ export function settleRound(round) {
   const discount = discountPence(round.discount, discountable);
   const shipping = round.shippingPence ?? 0;
 
-  const tier = estimateDiscount(saleSpools);
+  // A closed round carries a copy of the set it was closed under, so editing
+  // the config or switching the active sale cannot change a settled order.
+  // An open round follows whichever set is live.
+  const set = round.saleSet ?? saleSet(activeSaleSet ?? defaultSaleSetName());
+  const tier = estimateDiscount(saleSpools, set);
   // Priced here rather than in the page, like every other figure: the sale
   // applies to the discountable spend, not the whole order.
   const estimatedDiscount = discountPence({ kind: "percent", value: tier.percent }, discountable);

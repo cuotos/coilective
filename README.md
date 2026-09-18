@@ -188,7 +188,23 @@ and paying £4 to post can come to more than a bigger one that posts free.
 
 Those numbers live in **`sale.config.mjs`** at the root, because they are not
 facts about the software — they are what Bambu happened to be doing last time,
-and they move. Edit, commit, redeploy; nothing else needs touching.
+and they move. It holds a **named set per sale** rather than one set edited in
+place, so last Easter's rates survive the next bulk sale.
+
+Which set is live is not in the file. That changes between sales without
+wanting a deploy, so it is picked in the UI — on the estimate line itself,
+since the estimate is the only thing it affects — and stored with the rounds.
+Shared, not per-browser: "there is a bulk sale on" is a fact about the world,
+not a preference.
+
+**Closing a round freezes the whole set onto it.** Not the name — the name
+still drifts when somebody edits that set's numbers — but a copy of the
+postage, the free-postage point and every tier. An order settled in April still
+explains itself in December, whatever the config says by then.
+
+Money was never at risk from this: what a closed round owes comes from the
+discount typed in at close, and `settleRound` has never consulted the tiers for
+it. The freezing is so the *explanation* holds up too.
 
 They cannot live in `netlify.toml`: variables declared there are build-time
 only and functions never see them, and its schema is Netlify's own, so an

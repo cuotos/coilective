@@ -6,6 +6,8 @@
  * less machinery than a file per endpoint.
  *
  *   POST   /api/login                          { password } → a session cookie
+ *   GET    /api/settings                       which sale is on, and the choices
+ *   PATCH  /api/settings                       { activeSaleSet }
  *   GET    /api/state                          everything the page needs
  *   POST   /api/lookup                         { url } or { id } → variants
  *   GET    /api/catalogue                      what the colour index knows
@@ -24,12 +26,13 @@
 import { assertAuthed, login, NotConfigured, Unauthorized } from "../lib/auth.mjs";
 import { lookupProduct } from "../lib/bambu.mjs";
 import { findColour } from "../lib/catalogue.mjs";
-import { settleRound } from "../lib/money.mjs";
+import { settleRound, saleSets } from "../lib/money.mjs";
 import {
   ensureOpenRound, readRound, addItem, removeItem, updateItem,
   closeRound, reopenRound, renameRound, deleteRound,
   setPaidBy, setSettled, setClosedAt,
-  readCatalogue, writeCatalogue, NotFound, Conflict, BadRequest,
+  readCatalogue, writeCatalogue, readSettings, setActiveSaleSet,
+  NotFound, Conflict, BadRequest,
 } from "../lib/store.mjs";
 
 export const config = { path: "/api/*" };
@@ -39,9 +42,6 @@ const json = (body, status = 200, headers = {}) =>
     status,
     headers: { "content-type": "application/json", "cache-control": "no-store", ...headers },
   });
-
-/** A round plus the derived totals, so the page never does money maths. */
-const withTotals = (round) => ({ ...round, settlement: settleRound(round) });
 
 export default async function handler(request) {
   const { pathname } = new URL(request.url);
@@ -68,6 +68,25 @@ export default async function handler(request) {
     // later cannot forget to make it.
     assertAuthed(request);
 
+    // Which sale is on, read once per request. An open round estimates against
+    // it; a closed round ignores it in favour of the set frozen onto it.
+    const settings = await readSettings();
+
+    /** A round plus the derived totals, so the page never does money maths. */
+    const withTotals = (round) => ({ ...round, settlement: settleRound(round, settings) });
+
+    // GET /api/settings — what the picker needs
+    if (parts[0] === "settings") {
+      if (method === "GET") {
+        return json({ ...settings, sets: saleSets() });
+      }
+      // PATCH /api/settings  { activeSaleSet }
+      if (method === "PATCH") {
+        const { activeSaleSet } = await body();
+        return json({ ...(await setActiveSaleSet(activeSaleSet)), sets: saleSets() });
+      }
+    }
+
     // GET /api/state
     if (method === "GET" && parts[0] === "state") {
       // Summaries are derived from the rounds, never cached in the index, so
@@ -85,8 +104,9 @@ export default async function handler(request) {
           // order went in, which is what the history is a list of.
           closedAt: r.closedAt ?? null,
           itemCount: r.items.reduce((n, i) => n + i.qty, 0),
-          totalPence: settleRound(r).totalPence,
+          totalPence: settleRound(r, settings).totalPence,
         })),
+        settings: { ...settings, sets: saleSets() },
       });
     }
 

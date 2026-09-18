@@ -263,6 +263,13 @@
   }
   .estimate strong { color: var(--accent); }
   .estimate-caveat { display: block; margin-top: 0.25rem; color: var(--faint); font-size: 0.8rem; }
+  .sale-picker { color: var(--muted); }
+  .sale-picker select {
+    font: inherit; color: var(--ink); background: none;
+    border: none; border-bottom: 1px dashed var(--line);
+    padding: 0 0.1rem; cursor: pointer;
+  }
+  .sale-picker select:hover { color: var(--accent); border-bottom-color: var(--accent); }
 
   .no-sale-note { display: inline-block; margin-top: 0.1rem; color: var(--warn); font-size: 0.8rem; white-space: nowrap; }
 
