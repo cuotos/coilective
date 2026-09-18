@@ -935,6 +935,18 @@ $("item-price").addEventListener("keydown", (e) => e.key === "Enter" && saveItem
 $("item-sale").addEventListener("change", (event) => {
   $("item-sale-label").classList.toggle("on", event.target.checked);
 });
+// A focused number input eats the scroll wheel and silently changes quantity,
+// so somebody scrolling past a list can buy three more spools without noticing.
+// Blurring gives the scroll back to the page and leaves the value alone.
+// Delegated, because the qty boxes are re-rendered constantly and two more live
+// in dialogs.
+document.addEventListener("wheel", (event) => {
+  const el = event.target;
+  if (el instanceof HTMLInputElement && el.type === "number" && el === document.activeElement) {
+    el.blur();
+  }
+}, { passive: true });
+
 $("theme-toggle").addEventListener("click", () => setTheme(theme() === "dark" ? "light" : "dark"));
 $("lock-save").addEventListener("click", unlock);
 $("lock-input").addEventListener("keydown", (e) => e.key === "Enter" && unlock());
