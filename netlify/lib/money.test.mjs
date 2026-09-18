@@ -335,16 +335,26 @@ test("an unknown set name falls back to the default rather than throwing", () =>
 });
 
 test("an open round estimates with whichever set is active", () => {
+  // Sets are built here rather than named from the config: renaming a sale
+  // should not break a test about how sets are applied.
+  const stingy = readSaleSet(
+    { postagePence: 400, freePostageAt: 3, tiers: [{ spools: 4, percent: 30 }] }, "stingy");
+  const generous = readSaleSet(
+    { postagePence: 400, freePostageAt: 2, tiers: [{ spools: 3, percent: 35 }] }, "generous");
+
   const items = [{ person: "dan", unitPricePence: 1000, qty: 4 }];
 
-  const bulk = settleRound({ items }, { activeSaleSet: "bulk" });
-  const easter = settleRound({ items }, { activeSaleSet: "easter" });
+  assert.equal(settleRound({ items }, { activeSaleSet: stingy }).estimate.percent, 30);
+  assert.equal(settleRound({ items }, { activeSaleSet: generous }).estimate.percent, 35);
+  assert.equal(settleRound({ items }, { activeSaleSet: stingy }).estimate.saleSet, "stingy");
+});
 
-  // Four spools: 30% under the bulk sale, 35% under Easter.
-  assert.equal(bulk.estimate.percent, 30);
-  assert.equal(easter.estimate.percent, 35);
-  assert.equal(bulk.estimate.saleSet, "bulk");
-  assert.equal(easter.estimate.saleSet, "easter");
+test("a set can be named as well as passed", () => {
+  // The settings blob stores a name, so that path has to keep working — but
+  // this asserts the lookup, not any particular sale's numbers.
+  const name = defaultSaleSetName();
+  const items = [{ person: "dan", unitPricePence: 1000, qty: 4 }];
+  assert.equal(settleRound({ items }, { activeSaleSet: name }).estimate.saleSet, name);
 });
 
 test("a closed round uses the set frozen onto it, not the live one", () => {
@@ -361,8 +371,10 @@ test("a closed round uses the set frozen onto it, not the live one", () => {
     items: [{ person: "dan", unitPricePence: 1000, qty: 4 }],
   };
 
-  // Active set says 35%; the round's own set says 30% and wins.
-  const s = settleRound(round, { activeSaleSet: "easter" });
+  // The active set says 50%; the round's own set says 30% and wins.
+  const live = readSaleSet(
+    { postagePence: 400, freePostageAt: 1, tiers: [{ spools: 1, percent: 50 }] }, "live");
+  const s = settleRound(round, { activeSaleSet: live });
   assert.equal(s.estimate.percent, 30);
   assert.equal(s.estimate.saleSet, "as-it-was");
 });
@@ -376,10 +388,15 @@ test("what a closed round owes never depended on the tiers anyway", () => {
     items: [{ person: "dan", unitPricePence: 5000, qty: 2 }],
   };
 
-  const underBulk = settleRound(round, { activeSaleSet: "bulk" });
-  const underEaster = settleRound(round, { activeSaleSet: "easter" });
+  const generous = readSaleSet(
+    { postagePence: 0, freePostageAt: 1, tiers: [{ spools: 1, percent: 90 }] }, "generous");
+  const stingy = readSaleSet(
+    { postagePence: 900, freePostageAt: 99, tiers: [{ spools: 1, percent: 0 }] }, "stingy");
 
-  assert.equal(underBulk.discountPence, 1234);
-  assert.equal(underEaster.discountPence, 1234);
-  assert.equal(underBulk.totalPence, underEaster.totalPence);
+  const a = settleRound(round, { activeSaleSet: generous });
+  const b = settleRound(round, { activeSaleSet: stingy });
+
+  assert.equal(a.discountPence, 1234);
+  assert.equal(b.discountPence, 1234);
+  assert.equal(a.totalPence, b.totalPence);
 });

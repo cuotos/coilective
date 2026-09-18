@@ -227,7 +227,13 @@ export function settleRound(round, { activeSaleSet } = {}) {
   // A closed round carries a copy of the set it was closed under, so editing
   // the config or switching the active sale cannot change a settled order.
   // An open round follows whichever set is live.
-  const set = round.saleSet ?? saleSet(activeSaleSet ?? defaultSaleSetName());
+  // `activeSaleSet` is a name from the settings blob, but a resolved set is
+  // accepted too so callers and tests are not tied to what the config happens
+  // to be called today.
+  const active = typeof activeSaleSet === "object" && activeSaleSet !== null
+    ? activeSaleSet
+    : saleSet(activeSaleSet ?? defaultSaleSetName());
+  const set = round.saleSet ?? active;
   const tier = estimateDiscount(saleSpools, set);
   // Priced here rather than in the page, like every other figure: the sale
   // applies to the discountable spend, not the whole order.

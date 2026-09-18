@@ -46,8 +46,10 @@ export default {
       postagePence: 400,
       freePostageAt: 2,
       tiers: [
-        { spools: 3, percent: 35 },
-        { spools: 6, percent: 40 },
+        { spools: 2, percent: 10 },
+        { spools: 4, percent: 20 },
+        { spools: 6, percent: 27 },
+        { spools: 10, percent: 30 },
       ],
     },
 
