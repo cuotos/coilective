@@ -15,6 +15,31 @@ let state = { open: null, rounds: [] };
 let viewing = null; // a closed round being looked at, or null for the open one
 let pending = null; // the product a lookup returned, awaiting a variant choice
 
+/**
+ * Spell out the ladder the estimate is working from.
+ *
+ * The estimate says "about 40% off" without showing its working, which is fine
+ * until somebody wants to check it. This is the working: the active set's name,
+ * what postage costs and when it stops, and every rung.
+ */
+function renderTiers() {
+  const label = $("tiers");
+  const sets = state.settings?.sets ?? [];
+  const active = sets.find((s) => s.name === state.settings?.activeSaleSet);
+  if (!active) { label.textContent = ""; return; }
+
+  // steps carries a synthesised 0% rung at the free-postage count; postage is
+  // said in words instead, so it is not shown twice.
+  const rungs = active.steps
+    .filter((step) => step.percent > 0)
+    .map((step) => `<span class="rung"><span class="at">${step.spools}+</span> <span class="off">${step.percent}%</span></span>`)
+    .join("");
+
+  const postage = `${money(active.postagePence)} postage, free from ${spools(active.freePostageAt)}`;
+
+  label.innerHTML = `${esc(active.label)} — ${postage}. ${rungs}`;
+}
+
 // --- which deploy is this -------------------------------------------------
 
 /**
@@ -209,6 +234,7 @@ const shown = () => viewing ?? state.open;
 
 function render() {
   renderWhoami();
+  renderTiers();
   const round = shown();
 
   // The server guarantees an open round, so this only shows before the first

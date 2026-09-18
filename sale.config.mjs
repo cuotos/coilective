@@ -15,7 +15,7 @@
  */
 export default {
   /** Used until somebody picks a different set in the UI. */
-  default: "bulk",
+  default: "max43",
 
   sets: {
     /**
@@ -26,8 +26,8 @@ export default {
      * than quietly telling people that. Tiers can be in any order; they are
      * sorted on load.
      */
-    bulk: {
-      label: "Filament bulk sale",
+    max43: {
+      label: "Max 43%",
       postagePence: 400,
       freePostageAt: 3,
       tiers: [
@@ -41,8 +41,8 @@ export default {
      * Easter 2026 — steeper early on, and it did not need as many spools to
      * earn free postage.
      */
-    easter: {
-      label: "Easter mega deal",
+    max30: {
+      label: "Max 30%",
       postagePence: 400,
       freePostageAt: 2,
       tiers: [

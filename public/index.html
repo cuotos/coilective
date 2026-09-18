@@ -364,6 +364,14 @@
 
   footer { margin-top: 2.5rem; color: var(--faint); font-size: 0.82rem; }
   .version { display: block; margin-top: 0.4rem; }
+
+  /* The ladder the estimate is working from, spelled out — so a figure on the
+     wishlist can be checked rather than taken on trust. */
+  .tiers { display: block; margin-top: 0.5rem; }
+  .tiers .rung { white-space: nowrap; }
+  .tiers .rung + .rung::before { content: " · "; color: var(--line); }
+  .tiers .at { color: var(--muted); }
+  .tiers .off { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -428,6 +436,7 @@
     Prices are whatever the store said when an item was added — that's what the
     order actually cost. Discount and postage split in proportion to what each
     person spent.
+    <span id="tiers" class="tiers"></span>
     <span id="version" class="version"></span>
   </footer>
 </div>
