@@ -16,28 +16,38 @@ let viewing = null; // a closed round being looked at, or null for the open one
 let pending = null; // the product a lookup returned, awaiting a variant choice
 
 /**
- * Spell out the ladder the estimate is working from.
+ * Spell out every ladder, not just the one in use.
  *
  * The estimate says "about 40% off" without showing its working, which is fine
- * until somebody wants to check it. This is the working: the active set's name,
- * what postage costs and when it stops, and every rung.
+ * until somebody wants to check it. This is the working. All the sets are here
+ * rather than only the live one because the interesting question is usually
+ * "would the other sale have been better?", and because a closed round is
+ * settled against whichever set was live then — so the others are still the
+ * explanation for the numbers in the history.
  */
 function renderTiers() {
   const label = $("tiers");
   const sets = state.settings?.sets ?? [];
-  const active = sets.find((s) => s.name === state.settings?.activeSaleSet);
-  if (!active) { label.textContent = ""; return; }
+  if (!sets.length) { label.textContent = ""; return; }
 
-  // steps carries a synthesised 0% rung at the free-postage count; postage is
-  // said in words instead, so it is not shown twice.
-  const rungs = active.steps
-    .filter((step) => step.percent > 0)
-    .map((step) => `<span class="rung"><span class="at">${step.spools}+</span> <span class="off">${step.percent}%</span></span>`)
-    .join("");
+  const live = state.settings?.activeSaleSet;
 
-  const postage = `${money(active.postagePence)} postage, free from ${spools(active.freePostageAt)}`;
+  label.innerHTML = sets.map((set) => {
+    // steps carries a synthesised 0% rung at the free-postage count; postage is
+    // said in words instead, so it is not shown twice.
+    const rungs = set.steps
+      .filter((step) => step.percent > 0)
+      .map((step) => `<span class="rung"><span class="at">${step.spools}+</span> <span class="off">${step.percent}%</span></span>`)
+      .join("");
 
-  label.innerHTML = `${esc(active.label)} — ${postage}. ${rungs}`;
+    const postage = `${money(set.postagePence)} postage, free from ${spools(set.freePostageAt)}`;
+    const tag = set.name === live ? ` <span class="set-tag">in use</span>` : "";
+
+    return `<span class="tier-set${set.name === live ? " live" : ""}">`
+      + `<span class="set-name">${esc(set.label)}</span>${tag} — ${postage}. `
+      + (rungs || "<span class=\"rung\">no discount</span>")
+      + `</span>`;
+  }).join("");
 }
 
 // --- which deploy is this -------------------------------------------------

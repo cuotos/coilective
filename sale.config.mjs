@@ -29,7 +29,7 @@ export default {
     max43: {
       label: "Max 43%",
       postagePence: 400,
-      freePostageAt: 3,
+      freePostageAt: 4,
       tiers: [
         { spools: 4, percent: 30 },
         { spools: 6, percent: 40 },
@@ -41,18 +41,28 @@ export default {
      * Easter 2026 — steeper early on, and it did not need as many spools to
      * earn free postage.
      */
-    max30: {
+    max33: {
       label: "Max 30%",
       postagePence: 400,
-      freePostageAt: 2,
+      freePostageAt: 4,
       tiers: [
         { spools: 2, percent: 10 },
         { spools: 4, percent: 20 },
         { spools: 6, percent: 27 },
-        { spools: 10, percent: 30 },
+        { spools: 10, percent: 33 },
       ],
     },
-
+    max40: {
+      label: "Max 40%",
+      postagePence: 400,
+      freePostageAt: 3,
+      tiers: [
+        { spools: 2, percent: 15 },
+        { spools: 4, percent: 25 },
+        { spools: 6, percent: 35 },
+        { spools: 10, percent: 40 },
+      ],
+    },
     /** No sale on. Postage still applies. */
     none: {
       label: "No sale",

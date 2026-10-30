@@ -365,9 +365,19 @@
   footer { margin-top: 2.5rem; color: var(--faint); font-size: 0.82rem; }
   .version { display: block; margin-top: 0.4rem; }
 
-  /* The ladder the estimate is working from, spelled out — so a figure on the
-     wishlist can be checked rather than taken on trust. */
+  /* Every ladder, spelled out — so a figure on the wishlist can be checked
+     rather than taken on trust, and so the sale in use can be compared with
+     the ones that are not. One line each; the live one is the bright one. */
   .tiers { display: block; margin-top: 0.5rem; }
+  .tiers .tier-set { display: block; margin-top: 0.15rem; }
+  .tiers .tier-set.live { color: var(--muted); }
+  .tiers .tier-set.live .set-name { color: var(--ink); }
+  .tiers .set-name { font-weight: 600; }
+  .tiers .set-tag {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--accent); background: var(--accent-dim);
+    border-radius: 4px; padding: 0.05rem 0.3rem; vertical-align: 0.05rem;
+  }
   .tiers .rung { white-space: nowrap; }
   .tiers .rung + .rung::before { content: " · "; color: var(--line); }
   .tiers .at { color: var(--muted); }
