@@ -42,7 +42,7 @@ export default {
      * earn free postage.
      */
     max33: {
-      label: "Max 30%",
+      label: "Max 33%",
       postagePence: 400,
       freePostageAt: 4,
       tiers: [

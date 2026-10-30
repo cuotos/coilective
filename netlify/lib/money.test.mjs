@@ -158,7 +158,7 @@ test("with no payer named there is nothing outstanding to report", () => {
 
 test("the sale tiers land on the right discount", () => {
   assert.equal(estimateDiscount(0).percent, 0);
-  assert.equal(estimateDiscount(3).percent, 0);   // free postage, no money off
+  assert.equal(estimateDiscount(3).percent, 0);
   assert.equal(estimateDiscount(4).percent, 30);
   assert.equal(estimateDiscount(5).percent, 30);  // between tiers, keeps the lower
   assert.equal(estimateDiscount(6).percent, 40);
@@ -166,14 +166,14 @@ test("the sale tiers land on the right discount", () => {
   assert.equal(estimateDiscount(40).percent, 43); // no tier above the top one
 });
 
-test("free postage arrives at three spools and stays", () => {
-  assert.equal(estimateDiscount(2).freePostage, false);
-  assert.equal(estimateDiscount(3).freePostage, true);
+test("free postage arrives at four spools and stays", () => {
+  assert.equal(estimateDiscount(3).freePostage, false);
+  assert.equal(estimateDiscount(4).freePostage, true);
   assert.equal(estimateDiscount(20).freePostage, true);
 });
 
 test("the next tier says how many more spools it wants", () => {
-  assert.deepEqual(estimateDiscount(1).next, { spools: 3, more: 2, percent: 0, freePostage: true });
+  assert.deepEqual(estimateDiscount(1).next, { spools: 4, more: 3, percent: 30, freePostage: true });
   assert.deepEqual(estimateDiscount(4).next, { spools: 6, more: 2, percent: 40, freePostage: false });
   assert.deepEqual(estimateDiscount(9).next, { spools: 10, more: 1, percent: 43, freePostage: false });
   // Nothing to reach for at the top.
@@ -194,8 +194,8 @@ test("the estimate counts spools, not lines, and ignores what the sale misses", 
 });
 
 test("postage is the usual £4 until the order earns its way out of it", () => {
-  assert.equal(estimateDiscount(2).postagePence, 400);
-  assert.equal(estimateDiscount(3).postagePence, 0);
+  assert.equal(estimateDiscount(3).postagePence, 400);
+  assert.equal(estimateDiscount(4).postagePence, 0);
   assert.equal(estimateDiscount(10).postagePence, 0);
 });
 
@@ -289,9 +289,22 @@ test("a named sale set is read as written, in any order", () => {
   // Sorted by spool count, with the free-postage point folded in as a step so
   // the "next tier" nudge can point at it.
   assert.deepEqual(sale.steps, [
-    { spools: 2, percent: 0 },
+    { spools: 2, percent: 0, postageOnly: true },
     { spools: 3, percent: 25 },
     { spools: 8, percent: 45 },
+  ]);
+});
+
+test("free postage between two tiers keeps the discount of the tier below", () => {
+  const sale = readSaleSet({
+    postagePence: 400,
+    freePostageAt: 3,
+    tiers: [{ spools: 2, percent: 15 }, { spools: 4, percent: 25 }],
+  }, "test");
+  assert.deepEqual(sale.steps, [
+    { spools: 2, percent: 15 },
+    { spools: 3, percent: 15, postageOnly: true },
+    { spools: 4, percent: 25 },
   ]);
 });
 

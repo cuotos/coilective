@@ -119,9 +119,15 @@ export function readSaleSet({ label, postagePence, freePostageAt, tiers } = {}, 
 
   // The free-postage point is a step on the same ladder, so the "next tier"
   // nudge can point at it while it is still the nearest thing to reach for.
-  const steps = [...tiers];
-  if (!steps.some((t) => t.spools === freePostageAt)) steps.push({ spools: freePostageAt, percent: 0 });
-  steps.sort((a, b) => a.spools - b.spools);
+  // It keeps whatever discount the tier below it already gives: free postage
+  // at 3 after 15% at 2 is still 15% at 3. postageOnly marks it as not a
+  // tier of its own, so the footer does not list it as one.
+  const steps = [...tiers].sort((a, b) => a.spools - b.spools);
+  if (!steps.some((t) => t.spools === freePostageAt)) {
+    const below = steps.filter((t) => t.spools < freePostageAt).at(-1);
+    steps.push({ spools: freePostageAt, percent: below?.percent ?? 0, postageOnly: true });
+    steps.sort((a, b) => a.spools - b.spools);
+  }
 
   for (let i = 1; i < steps.length; i += 1) {
     if (steps[i].spools === steps[i - 1].spools) {

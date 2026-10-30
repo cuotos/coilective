@@ -33,10 +33,10 @@ function renderTiers() {
   const live = state.settings?.activeSaleSet;
 
   label.innerHTML = sets.map((set) => {
-    // steps carries a synthesised 0% rung at the free-postage count; postage is
+    // steps carries a synthesised rung at the free-postage count; postage is
     // said in words instead, so it is not shown twice.
     const rungs = set.steps
-      .filter((step) => step.percent > 0)
+      .filter((step) => !step.postageOnly && step.percent > 0)
       .map((step) => `<span class="rung"><span class="at">${step.spools}+</span> <span class="off">${step.percent}%</span></span>`)
       .join("");
 
